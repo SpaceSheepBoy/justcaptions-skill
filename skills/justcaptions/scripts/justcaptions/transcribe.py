@@ -11,9 +11,8 @@ from .grouping import Word, words_from_segments
 
 NO_ENGINE = """No transcription engine available. Pick one:
 
-  1. Just Captions API (no install, best accuracy; free beta key):
-       https://justcaptions.com/api/
-       export JUSTCAPTIONS_API_KEY=jc_live_...
+  1. Just Captions API (no install, best accuracy; 30 free minutes a month):
+       python3 jc.py --signup you@example.com
 
   2. Local, offline, free:
        pip install faster-whisper
@@ -72,9 +71,24 @@ def transcribe_local(video: Path, workdir: Path, model_name: str, language: Opti
     return words, info.language
 
 
+def local_available() -> bool:
+    try:
+        import faster_whisper  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def transcribe(video: Path, workdir: Path, duration: float, engine: str, model_name: str, language: Optional[str], glossary: List[str]):
     if engine == "auto":
         engine = "api" if api.api_key() else "local"
     if engine == "api":
-        return transcribe_api(video, workdir, duration, language, glossary)
+        try:
+            return transcribe_api(video, workdir, duration, language, glossary)
+        except api.APIError as e:
+            # Out of free minutes or over a cap: the video can still be
+            # captioned offline.
+            if e.code not in api.REFUSED or not local_available():
+                raise
+            print(f"  {api.explain(e)}\n  falling back to local faster-whisper", file=sys.stderr)
     return transcribe_local(video, workdir, model_name, language, glossary)

@@ -5,17 +5,24 @@ Standard library only, so the skill installs with nothing but Pillow.
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 DEFAULT_BASE = "https://api.justcaptions.com/v1"
+ACCOUNT_URL = "https://justcaptions.com/api/account/"
+KEY_FILE = Path.home() / ".config" / "justcaptions" / "api_key"
 MAX_AUDIO_BYTES = 12_000_000
 TEXT_BATCH = 400
 EMOJI_BATCH = 1000
 RETRY_STATUSES = {408, 429, 500, 502, 503, 504}
+# The API refused on billing grounds. Retrying won't help; local
+# transcription still can.
+REFUSED = {"quota_exceeded", "free_tier_busy", "spend_cap_reached", "payment_required"}
 
 
 class APIError(RuntimeError):
@@ -26,8 +33,41 @@ class APIError(RuntimeError):
 
 
 def api_key() -> Optional[str]:
+    """JUSTCAPTIONS_API_KEY, else the key saved by --signup."""
     key = os.environ.get("JUSTCAPTIONS_API_KEY", "").strip()
-    return key or None
+    if key:
+        return key
+    try:
+        return KEY_FILE.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def save_key(key: str) -> Path:
+    KEY_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(key + "\n")
+    os.chmod(KEY_FILE, 0o600)
+    return KEY_FILE
+
+
+def mask(key: str) -> str:
+    return f"{key[:12]}…{key[-4:]}" if len(key) > 20 else "…"
+
+
+def explain(error: "APIError") -> str:
+    """A message a person can act on."""
+    messages = {
+        "quota_exceeded": "You've used this month's free allowance (30 audio minutes, 50,000 caption characters). "
+                          f"Add a card to keep going (pay as you go, $0.01 per audio minute): {ACCOUNT_URL}",
+        "free_tier_busy": f"The free tier is at capacity today. Try again tomorrow, or add a card: {ACCOUNT_URL}",
+        "spend_cap_reached": f"Your monthly spend cap is reached. Raise it at {ACCOUNT_URL}",
+        "payment_required": f"Your last payment failed. Update your card at {ACCOUNT_URL}",
+        "invalid_api_key": "The API key wasn't accepted. Run `jc.py --signup YOUR_EMAIL` for a new one, "
+                           "or check JUSTCAPTIONS_API_KEY.",
+    }
+    return messages.get(error.code, str(error))
 
 
 def base_url() -> str:
@@ -53,11 +93,14 @@ def build_multipart(fields: Dict[str, str], files: Dict[str, Tuple[str, bytes, s
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def _request(method: str, path: str, body: Optional[bytes] = None, content_type: Optional[str] = None, timeout=180):
-    key = api_key()
-    if not key:
-        raise APIError(401, "invalid_api_key", "JUSTCAPTIONS_API_KEY is not set")
-    headers = {"Authorization": f"Bearer {key}", "User-Agent": "justcaptions-skill/1.0"}
+def _request(method: str, path: str, body: Optional[bytes] = None, content_type: Optional[str] = None,
+             timeout=180, auth: bool = True):
+    headers = {"User-Agent": "justcaptions-skill/1.1"}
+    if auth:
+        key = api_key()
+        if not key:
+            raise APIError(401, "invalid_api_key", "no API key set")
+        headers["Authorization"] = f"Bearer {key}"
     if content_type:
         headers["Content-Type"] = content_type
     for attempt in range(4):
@@ -73,7 +116,7 @@ def _request(method: str, path: str, body: Optional[bytes] = None, content_type:
                 payload = {"error": raw[:200] or e.reason}
             # A monthly quota will not reset on retry; a daily abuse cap or a
             # provider hiccup might.
-            if e.code in RETRY_STATUSES and payload.get("code") != "quota_exceeded" and attempt < 3:
+            if e.code in RETRY_STATUSES and payload.get("code") not in REFUSED and attempt < 3:
                 time.sleep(2 ** attempt)
                 continue
             raise APIError(e.code, payload.get("code", "error"), payload.get("error", "request failed")) from None
@@ -84,8 +127,15 @@ def _request(method: str, path: str, body: Optional[bytes] = None, content_type:
             raise APIError(0, "network_error", str(e.reason)) from None
 
 
-def _json(path: str, payload: dict) -> dict:
-    return _request("POST", path, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json")
+def _json(path: str, payload: dict, auth: bool = True) -> dict:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    return _request("POST", path, body, "application/json", auth=auth)
+
+
+def signup(email: str) -> dict:
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise APIError(400, "invalid_request", f"{email!r} is not an email address")
+    return _json("/signup", {"email": email}, auth=False)
 
 
 def transcribe(audio: bytes, filename: str = "audio.m4a", language: Optional[str] = None, glossary: Optional[List[str]] = None) -> dict:
