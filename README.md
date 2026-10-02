@@ -72,12 +72,28 @@ Without a key, everything runs offline with faster-whisper. With a key you get:
 - `--correct` and `--translate`
 - AI emoji picks for the Emoji style (the offline fallback is a keyword table)
 
-The key is free during the beta. Get one at **https://justcaptions.com/api/**, then:
+Getting a key is instant and needs no card:
 
 ```bash
-export JUSTCAPTIONS_API_KEY=jc_live_...
-python3 skills/justcaptions/scripts/jc.py --usage   # minutes used this month
+python3 skills/justcaptions/scripts/jc.py --signup you@example.com
 ```
+
+The key is saved to `~/.config/justcaptions/api_key` (readable only by you). If `JUSTCAPTIONS_API_KEY` is set, it is used instead.
+
+```bash
+python3 skills/justcaptions/scripts/jc.py --account   # usage this month and estimated charge
+```
+
+### Pricing
+
+| | price | free every month |
+| --- | --- | --- |
+| Transcription | $0.01 per audio minute, billed per second | 30 minutes |
+| Correct, translate, emoji | $0.01 per 1,000 caption characters sent | 50,000 characters |
+
+- **Free plan** (no card): stops when the free allowance runs out. When faster-whisper is installed, transcription carries on locally.
+- **Pay as you go**: add a card at https://justcaptions.com/api/account/ to keep going past the free allowance. Stripe invoices you monthly, and the default spend cap is $100 a month.
+- Failed requests are not billed.
 
 The API takes audio only. The script pulls a small mono track out of your video, so the video itself is never uploaded, and burning always happens on your machine. API reference: https://justcaptions.com/api/
 

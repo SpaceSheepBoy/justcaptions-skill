@@ -1,7 +1,7 @@
 {
   "name": "justcaptions",
   "description": "Caption videos locally: transcribe, export SRT/VTT, and burn in TikTok-style captions (yellow box, karaoke, Emoji) in batch.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": { "name": "Just Captions", "url": "https://justcaptions.com" },
   "homepage": "https://justcaptions.com/api/",
   "repository": "https://github.com/SpaceSheepBoy/justcaptions-skill",

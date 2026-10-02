@@ -10,9 +10,19 @@ Needs `ffmpeg` and Python 3.9+ with Pillow (`pip install Pillow`).
 
 ## Transcription engine
 
-- `JUSTCAPTIONS_API_KEY` set → Just Captions API (best accuracy, needed for `--correct`, `--translate`, AI emoji picks). Free beta key: https://justcaptions.com/api/
+- API key found (`JUSTCAPTIONS_API_KEY`, else `~/.config/justcaptions/api_key`) → Just Captions API: best accuracy, and needed for `--correct`, `--translate` and AI emoji picks.
 - Otherwise → local `faster-whisper` (`pip install faster-whisper`; `--model small` default, `base` is faster, `large-v3` is best).
 - Neither → the script says so. Ask the user which they want; don't install packages without asking.
+
+**No key, but the user wants an API feature:** ask for their email address, then run
+`python3 scripts/jc.py --signup THEIR_EMAIL`. Never make up or guess an email. Signup is instant,
+needs no card, and saves the key to `~/.config/justcaptions/api_key`. Don't print the key itself.
+
+Pricing: 30 audio minutes and 50,000 caption characters free every month. After that it's pay as you go
+($0.01 per audio minute, $0.01 per 1,000 caption characters) once a card is added at
+https://justcaptions.com/api/account/. `python3 scripts/jc.py --account` shows usage and the estimated charge.
+If the API refuses because of the free allowance, the free-tier capacity or a spend cap, the script says why. When
+faster-whisper is installed, it transcribes locally instead. Pass the message and the account link on to the user.
 
 ## Commands
 
@@ -25,6 +35,8 @@ python3 scripts/jc.py talk.mp4 --translate es --burn        # Spanish captions (
 python3 scripts/jc.py talk.mp4 --correct --glossary "Kila Labs, Just Captions" --burn
 python3 scripts/jc.py talk.mp4 --captions talk.srt --burn   # burn an existing/edited SRT, VTT or JSON
 python3 scripts/jc.py --list-styles
+python3 scripts/jc.py --signup you@example.com              # free API key (ask the user for the email)
+python3 scripts/jc.py --account                             # usage this month, estimated charge
 ```
 
 Options: `--style yellow-box|white-outline|black-box|karaoke|emoji`, `--position top|middle|bottom|0-1`,

@@ -7,6 +7,7 @@
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -32,7 +33,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--language", help="spoken language hint, e.g. en, zh, es")
     p.add_argument("--glossary", default="", help="comma-separated names and terms to spell correctly")
     p.add_argument("--engine", default="auto", choices=["auto", "api", "local"],
-                   help="auto = API when JUSTCAPTIONS_API_KEY is set, else local faster-whisper")
+                   help="auto = API when an API key is set, else local faster-whisper")
     p.add_argument("--model", default="small", help="faster-whisper model for local transcription")
     p.add_argument("--captions", help="use an existing .srt/.vtt/.json instead of transcribing (one input only)")
     p.add_argument("--correct", action="store_true", help="AI-correct the transcript (API key required)")
@@ -40,7 +41,9 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--crf", type=int, default=20)
     p.add_argument("--keep-frames", action="store_true", help="keep the rendered PNGs (for debugging)")
     p.add_argument("--list-styles", action="store_true")
-    p.add_argument("--usage", action="store_true", help="show this month's API usage")
+    p.add_argument("--signup", metavar="EMAIL", help="create a free API key and save it to ~/.config/justcaptions/api_key")
+    p.add_argument("--account", "--usage", dest="account", action="store_true",
+                   help="show this month's API usage and estimated charge")
     return p.parse_args(argv)
 
 
@@ -75,8 +78,37 @@ def load_captions(path: Path, layout: str, length: str, max_words) -> List[Capti
 
 def need_key(feature: str) -> None:
     if not api.api_key():
-        raise SystemExit(f"{feature} uses the Just Captions API. Get a free beta key at "
-                         "https://justcaptions.com/api/ and set JUSTCAPTIONS_API_KEY.")
+        raise SystemExit(f"{feature} uses the Just Captions API. Create a free key with "
+                         "`jc.py --signup YOUR_EMAIL` (30 audio minutes and 50,000 caption characters free each month).")
+
+
+def signup(email: str) -> int:
+    if api.api_key():
+        where = "JUSTCAPTIONS_API_KEY" if os.environ.get("JUSTCAPTIONS_API_KEY", "").strip() else str(api.KEY_FILE)
+        print(f"An API key is already set ({where}). Remove it first to sign up again.", file=sys.stderr)
+        return 1
+    result = api.signup(email)
+    path = api.save_key(result["key"])
+    print(f"Created API key {api.mask(result['key'])} (plan: {result.get('plan', 'free')})")
+    print(f"Saved to {path}")
+    print("Free every month: 30 audio minutes, 50,000 caption characters.")
+    print(f"Add a card for pay-as-you-go beyond that: {api.ACCOUNT_URL}")
+    return 0
+
+
+def format_account(u: dict) -> str:
+    minutes = lambda s: f"{(s or 0) / 60:.1f}"  # noqa: E731
+    dollars = lambda c: f"${(c or 0) / 100:.2f}"  # noqa: E731
+    lines = [
+        f"Account   {u.get('email') or '-'}  (plan: {u.get('plan', '-')})",
+        f"Month     {u.get('month', '-')}",
+        f"Audio     {minutes(u.get('audio_seconds'))} min used, {minutes(u.get('free_audio_seconds'))} min free",
+        f"Text      {u.get('text_chars', 0):,} chars used, {u.get('free_text_chars', 0):,} chars free",
+        f"Estimated charge  {dollars(u.get('estimated_charge_cents'))}"
+        + (f"  (spend cap {dollars(u['spend_cap_cents'])})" if u.get("spend_cap_cents") else ""),
+        f"Card, invoices, spend cap: {api.ACCOUNT_URL}",
+    ]
+    return "\n".join(lines)
 
 
 def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[Path]:
@@ -113,7 +145,7 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
                     for c, e in zip(captions, api.emoji([c.text for c in captions], language)):
                         c.emoji = e
                 except api.APIError as e:
-                    print(f"  emoji API failed ({e}); using the offline table", file=sys.stderr)
+                    print(f"  emoji API failed ({api.explain(e)}); using the offline table", file=sys.stderr)
             emoji.fill_local(captions, language)
 
         stem = out_dir / video.stem
@@ -146,10 +178,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         for name, st in styles.STYLES.items():
             print(f"{name:14} {st.description}")
         return 0
-    if args.usage:
-        need_key("--usage")
-        print(json.dumps(api.usage(), indent=2))
-        return 0
+    try:
+        if args.signup:
+            return signup(args.signup)
+        if args.account:
+            need_key("--account")
+            print(format_account(api.usage()))
+            return 0
+    except api.APIError as e:
+        print(api.explain(e), file=sys.stderr)
+        return 1
     if not args.inputs:
         print("give at least one video (or --list-styles). See --help.", file=sys.stderr)
         return 2
@@ -170,7 +208,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             for path in caption_video(video, args, out_dir):
                 print(path)
             print(f"  done in {time.time() - started:.1f}s", file=sys.stderr)
-        except (RuntimeError, api.APIError) as e:
+        except api.APIError as e:
+            failures += 1
+            print(f"  failed: {api.explain(e)}", file=sys.stderr)
+        except RuntimeError as e:
             failures += 1
             print(f"  failed: {e}", file=sys.stderr)
     if len(videos) > 1:
