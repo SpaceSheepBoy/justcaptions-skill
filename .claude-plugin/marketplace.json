@@ -1,0 +1,15 @@
+{
+  "name": "justcaptions",
+  "description": "Just Captions: open-source video captioning for Claude Code.",
+  "owner": {
+    "name": "Just Captions",
+    "url": "https://justcaptions.com"
+  },
+  "plugins": [
+    {
+      "name": "justcaptions",
+      "source": "./",
+      "description": "Caption videos locally: transcribe, export SRT/VTT, and burn in TikTok-style captions in batch."
+    }
+  ]
+}
