@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import List, Tuple
 
+from . import execution
+
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 
 
@@ -19,9 +21,26 @@ def require_ffmpeg() -> None:
 
 
 def run(args: List[str]) -> None:
-    proc = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    execution.check()
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        while True:
+            try:
+                _, stderr = proc.communicate(timeout=.2)
+                break
+            except subprocess.TimeoutExpired:
+                execution.check()
+    except BaseException:
+        proc.terminate()
+        try:
+            proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+        raise
+    execution.check()
     if proc.returncode != 0:
-        tail = "\n".join(proc.stderr.strip().splitlines()[-12:])
+        tail = "\n".join(stderr.strip().splitlines()[-12:])
         raise RuntimeError(f"{args[0]} failed:\n{tail}")
 
 

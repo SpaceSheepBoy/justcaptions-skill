@@ -11,23 +11,24 @@ from typing import Any, Literal, Optional
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import ToolAnnotations
 
-from . import api, cli, media, styles
+from . import api, cli, media, styles, jobs, execution, metrics
+from .assets import ASSETS
 from .grouping import group_words, words_from_segments
 from .render import Renderer
 
-mcp = FastMCP("Just Captions", instructions="Use list_styles and check_environment first. For local videos call caption_video, then poll get_job until completed or failed. Rendering stays local. API transcription sends extracted audio; AI edits send caption text. Keep API keys out of tool arguments. Existing output files are protected unless overwrite is explicitly requested.")
+mcp = FastMCP("Just Captions", instructions="Use list_styles and check_environment first. For local videos call caption_video, then poll get_job until completed, failed or cancelled. Jobs persist across restarts; use list_jobs and resume_job to recover. Rendering stays local. API transcription sends extracted audio; AI edits send caption text. Keep API keys out of tool arguments. Existing output files are protected unless overwrite is explicitly requested.")
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False)
-JOBS = {}
 TASKS = set()
 
 
 @mcp.tool(annotations=READ, structured_output=True)
 def check_environment() -> dict[str, Any]:
     """Check media tools, fonts, API-key availability and offline recognition. Never returns the key."""
+    metrics.record("mcp_connected")
     return {"ffmpeg": shutil.which("ffmpeg"), "ffprobe": shutil.which("ffprobe"),
             "api_key_configured": bool(api.api_key()), "offline_transcription_installed": importlib.util.find_spec("faster_whisper") is not None,
-            "rendering": "local", "catalog_version": styles.catalog()["catalog_version"],
+            "rendering": "local", "job_store": str(jobs.directory()), "catalog_version": styles.catalog()["catalog_version"],
             "setup": "Install ffmpeg; use a Just Captions API key or install justcaptions-agent[local] for offline recognition."}
 
 
@@ -53,7 +54,7 @@ def preview_style(style_id: str = "word-highlight", text: str = "Make your next 
         raise ValueError("Preview dimensions must be 64..1920; text must contain 1..200 characters.")
     style = styles.resolve(style_id, overrides)
     words = words_from_segments([{"start": 0, "end": 2, "text": text}])
-    layout = "portrait" if height > width else "landscape" if width > height else "square"
+    layout = styles.layout_for(width, height)
     caption = group_words(words, layout, max_words=style.max_words)[0]
     caption.emoji = "✨"
     renderer = Renderer(width, height, style, size, cli.position_value(position), safe_area)
@@ -80,8 +81,6 @@ async def caption_video(input_path: str, output_dir: str, style_id: str = "word-
     API recognition sends audio, AI edits send text, and MP4 rendering remains local.
     captions_path reuses an existing SRT/VTT/JSON without recognition. Original video is preserved.
     """
-    if sum(j["status"] in ("queued", "running") for j in JOBS.values()) >= 2:
-        raise ValueError("Two jobs are already active. Wait for one to finish.")
     media.require_ffmpeg()
     source = Path(input_path).expanduser().resolve()
     if not source.exists():
@@ -99,62 +98,138 @@ async def caption_video(input_path: str, output_dir: str, style_id: str = "word-
     if not captions_path and engine != "api" and not api.api_key() and importlib.util.find_spec("faster_whisper") is None:
         raise ValueError("Configure an API key or install the local transcription extra.")
     destination.mkdir(parents=True, exist_ok=True)
-    if len(JOBS) >= 100:
-        for old_id in list(JOBS):
-            if JOBS[old_id]["status"] in ("completed", "failed"):
-                del JOBS[old_id]
-                break
     job_id = uuid.uuid4().hex
-    JOBS[job_id] = {"job_id": job_id, "status": "queued", "stage": "queued", "total": len(videos), "finished": 0, "results": []}
     params = dict(style_id=style_id, captions_path=captions_path, engine=engine, language=language,
                   translate_to=translate_to, correct=correct, glossary=glossary or [], size=size,
                   position=position, safe_area=safe_area, length=length, overrides=overrides,
-                  burn=burn, overwrite=overwrite)
-    task = asyncio.create_task(_run_job(job_id, videos, destination, params))
+                  burn=burn, overwrite=overwrite, offline_demo=(source == (ASSETS / "demo/story.mp4").resolve() and bool(captions_path) and Path(captions_path).expanduser().resolve() == (ASSETS / "demo/story.json").resolve()))
+    row = {"job_id": job_id, "status": "queued", "stage": "queued", "total": len(videos), "finished": 0, "results": [],
+           "params": params, "sources": [jobs.fingerprint(video) for video in videos], "destination": str(destination),
+           "caption_source": jobs.fingerprint(Path(captions_path).expanduser()) if captions_path else None}
+    jobs.claim(row)
+    _schedule(job_id)
+    return {"job_id": job_id, "status": "queued", "next": "Poll get_job. Jobs are saved locally; after interruption use resume_job. cancel_job stops local work; a cloud request already sent may finish and be charged."}
+
+
+def _schedule(job_id):
+    task = asyncio.create_task(_run_job(job_id))
     TASKS.add(task)
     task.add_done_callback(TASKS.discard)
-    return {"job_id": job_id, "status": "queued", "next": "Poll get_job with this job_id every few seconds. Jobs live while this MCP process is running."}
 
 
-async def _run_job(job_id, videos, destination, params):
+async def _run_job(job_id):
     def run():
-        job = JOBS[job_id]
-        job["status"] = "running"
+        job = jobs.get(job_id)
+        params = job['params']
+        destination = Path(job['destination'])
+        job['status'] = 'running'
+        jobs.save(job)
         def stage(value):
-            job["stage"] = value
-        for video in videos:
-            row = {"input": str(video.resolve())}
-            # Folders can contain clip.mov and clip.mp4; each gets its own output folder.
-            out = destination / video.name if len(videos) > 1 else destination
-            out.mkdir(parents=True, exist_ok=True)
-            args = cli.parse_args([])
-            args.style = params["style_id"]
-            args.style_overrides = params["overrides"]
-            args.captions = str(Path(params["captions_path"]).expanduser().resolve()) if params["captions_path"] else None
-            args.engine, args.language, args.translate = params["engine"], params["language"], params["translate_to"]
-            args.correct, args.glossary = params["correct"], ", ".join(params["glossary"])
-            args.size, args.position, args.safe_area = params["size"], params["position"], params["safe_area"]
-            args.length, args.burn, args.overwrite = params["length"], params["burn"], params["overwrite"]
-            args.formats, args.progress = "srt,vtt,json", stage
-            try:
-                paths = cli.caption_video(video, args, out)
-                row.update(status="completed", outputs=[str(p.resolve()) for p in paths], media_verified=params["burn"],
-                           timing_note="Recognition word timestamps are retained; edited, translated or imported subtitle-only text uses estimated word timing.")
-            except Exception as error:
-                row.update(status="failed", error=api.explain(error) if isinstance(error, api.APIError) else str(error))
-            job["results"].append(row)
-            job["finished"] += 1
-        job["status"] = "failed" if any(r["status"] == "failed" for r in job["results"]) else "completed"
-        job["stage"] = job["status"]
+            execution.check()
+            job['stage'] = value
+            jobs.save(job)
+        try:
+            for index, source in enumerate(job['sources']):
+                video = Path(source['path'])
+                if any(row['input'] == str(video) and row['status'] == 'completed' for row in job['results']):
+                    continue
+                work = jobs.directory() / 'work' / job_id / str(index)
+                work.mkdir(parents=True, exist_ok=True, mode=0o700)
+                token = execution.context.set({'work': work, 'cancelled': lambda: jobs.cancelled(job_id)})
+                try:
+                    execution.check()
+                    if jobs.fingerprint(video) != source or (job['caption_source'] and jobs.fingerprint(Path(job['caption_source']['path'])) != job['caption_source']):
+                        raise ValueError('Source changed since this job started. Start a new job instead of replaying its cloud requests.')
+                    out = destination / video.name if job['total'] > 1 else destination
+                    out.mkdir(parents=True, exist_ok=True)
+                    args = cli.parse_args([])
+                    args.style, args.style_overrides = params['style_id'], params['overrides']
+                    args.captions = job['caption_source']['path'] if job['caption_source'] else None
+                    args.engine, args.language, args.translate = params['engine'], params['language'], params['translate_to']
+                    args.correct, args.glossary = params['correct'], ', '.join(params['glossary'])
+                    args.size, args.position, args.safe_area = params['size'], params['position'], params['safe_area']
+                    args.length, args.burn, args.overwrite = params['length'], params['burn'], params['overwrite']
+                    args.formats, args.progress = 'srt,vtt,json', stage
+                    args.demo = params.get('offline_demo',False)
+                    row = {'input': str(video)}
+                    try:
+                        paths = cli.caption_video(video, args, out)
+                        row.update(status='completed', outputs=[str(path.resolve()) for path in paths], media_verified=params['burn'],
+                                   timing_note='Edited, translated and subtitle-only text uses estimated word timing.')
+                    except execution.JobCancelled:
+                        raise
+                    except Exception as error:
+                        row.update(status='failed', error=api.explain(error) if isinstance(error, api.APIError) else str(error))
+                    job['results'] = [old for old in job['results'] if old['input'] != str(video)] + [row]
+                    job['finished'] = len(job['results'])
+                    jobs.save(job)
+                    if row['status'] == 'completed':
+                        shutil.rmtree(work / 'frames',ignore_errors=True)
+                        shutil.rmtree(work / 'outputs',ignore_errors=True)
+                        for audio in work.glob('*.m4a'):
+                            audio.unlink(missing_ok=True)
+                finally:
+                    execution.context.reset(token)
+            job['status'] = 'failed' if any(row['status'] == 'failed' for row in job['results']) else 'completed'
+        except execution.JobCancelled:
+            job['status'] = 'cancelled'
+        except BaseException as error:
+            job.update(status='interrupted', error=str(error))
+        job['stage'] = job['status']
+        jobs.save(job)
+        if job['status'] == 'completed' and params['burn']:
+            metrics.record('export_completed', params['style_id'], job_id)
     await asyncio.to_thread(run)
 
 
 @mcp.tool(annotations=READ, structured_output=True)
 def get_job(job_id: str) -> dict[str, Any]:
-    """Return progress, per-file failures and verified output paths for a caption job. No repeated paid work."""
-    if job_id not in JOBS:
-        raise ValueError("Unknown job ID. Jobs live only in the current MCP process.")
-    return json.loads(json.dumps(JOBS[job_id]))
+    """Read a saved caption job, including verified outputs and per-file failures."""
+    return jobs.public(jobs.get(job_id))
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def list_jobs(limit: int = 20) -> dict[str, Any]:
+    """Find durable jobs after reconnecting, including jobs interrupted by a process restart."""
+    if not 1 <= limit <= 100:
+        raise ValueError('limit must be 1..100.')
+    return {'jobs': [jobs.public(row) for row in jobs.list_all(limit)]}
+
+
+@mcp.tool(annotations=WRITE, structured_output=True)
+def cancel_job(job_id: str) -> dict[str, Any]:
+    """Stop owned local rendering and pending files. An in-flight cloud request may finish and be charged; its response is cached for resume."""
+    return jobs.public(jobs.cancel(job_id))
+
+
+@mcp.tool(annotations=WRITE, structured_output=True)
+async def resume_job(job_id: str) -> dict[str, Any]:
+    """Resume an interrupted/cancelled/failed job. Completed files are skipped, failed files alone are retried, and successful cloud responses are reused."""
+    row = jobs.get(job_id)
+    if row['status'] == 'completed':
+        return jobs.public(row)
+    jobs.claim(row, resume=True)
+    _schedule(job_id)
+    return jobs.public(row)
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def estimate_video(input_path: str, text_chars: int = 0) -> dict[str, Any]:
+    """Estimate cloud cost before transcription. Audio is measured locally; supply known text_chars for editing/translation, otherwise their cost is excluded. Does not reserve credit."""
+    media.require_ffmpeg()
+    videos = media.expand_inputs([str(Path(input_path).expanduser().resolve())])
+    if not videos or len(videos) > 100 or text_chars < 0:
+        raise ValueError('Choose 1..100 videos and a nonnegative text_chars value.')
+    seconds = sum(media.video_info(video)[2] for video in videos)
+    result = api.estimate(seconds, text_chars)
+    return {**result, 'files': len(videos), 'audio_seconds': seconds, 'text_chars': text_chars, 'note': 'Unknown future caption text is excluded. Rendering and imported-caption jobs cost nothing unless AI edits are requested.'}
+
+
+@mcp.tool(annotations=WRITE, structured_output=True)
+async def run_demo(output_dir: str, style_id: str = 'word-highlight') -> dict[str, Any]:
+    """Export the bundled 6-second human-narration sample with animated captions. No API key, upload or model download required. Credits are bundled with the sample."""
+    return await caption_video(input_path=str(ASSETS / 'demo/story.mp4'), captions_path=str(ASSETS / 'demo/story.json'),
+                               output_dir=output_dir, style_id=style_id, size='large', safe_area='tiktok')
 
 
 def main():

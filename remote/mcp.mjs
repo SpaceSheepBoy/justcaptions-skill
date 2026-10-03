@@ -17,7 +17,7 @@ export async function handleMcpRequest(request, { handleAPI, catalog }) {
       'Access-Control-Allow-Headers': 'Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id',
     } });
   }
-  const server = new McpServer({ name: 'justcaptions', version: '1.2.1' }, {
+  const server = new McpServer({ name: 'justcaptions', version: '1.3.0' }, {
     instructions: 'This remote MCP transcribes audio and edits caption text. It does not read local files or render MP4. For local video captioning, style previews and rendering, install the open-source Just Captions local MCP at https://justcaptions.com/agents/. Paid tools require Authorization: Bearer with your Just Captions API key. Use pricing and get_usage before paid calls. Preserve segments and word timestamps separately from corrected text.',
     maxToolInputElements: 10000,
   });
@@ -38,6 +38,7 @@ export async function handleMcpRequest(request, { handleAPI, catalog }) {
   server.registerTool('list_styles', { description: 'List 15 local rendering presets, aliases, style overrides and platform safe areas. This remote server returns the catalog; render via the local MCP.', annotations: read }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog) }], structuredContent: catalog }));
   server.registerTool('get_pricing', { description: 'Current API prices and monthly free allowances, no key needed.', annotations: read }, () => call('GET', '/pricing'));
   server.registerTool('get_usage', { description: 'Current usage, estimated bill and monthly spend cap for your configured API key.', annotations: read }, () => call('GET', '/usage'));
+  server.registerTool('estimate_cost', {description:'Estimate additional cloud charges and available allowance before a batch. Includes active budget holds; does not reserve credit.',annotations:read,inputSchema:{audio_seconds:z.number().min(0).max(864000).optional(),text_chars:z.number().int().min(0).max(100000000).optional()}},input=>call('POST','/estimate',input));
   const retry = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/).optional().describe('Unique request ID; reuse only when retrying identical work to avoid repeating paid calls.');
   const captions = z.array(z.string().min(1)).min(1).max(400);
   const language = z.string().max(32).optional();

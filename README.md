@@ -35,7 +35,7 @@ Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/) and 
 ```toml
 [mcp_servers.justcaptions]
 command = "uvx"
-args = ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.1", "justcaptions-mcp"]
+args = ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl", "justcaptions-mcp"]
 startup_timeout_sec = 120
 
 [mcp_servers.justcaptions_cloud]
@@ -51,7 +51,7 @@ bearer_token_env_var = "JUSTCAPTIONS_API_KEY"
     "justcaptions": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.1", "justcaptions-mcp"]
+      "args": ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl", "justcaptions-mcp"]
     },
     "justcaptions_cloud": {
       "type": "http",
@@ -75,7 +75,7 @@ Ask: **“Caption `~/Movies/intro.mp4` with Word Highlight for TikTok. Save MP4,
 | `get_job` | Poll stages and per-file verified output paths |
 | `get_usage` | Current API usage and estimated monthly charge |
 
-`caption_video` takes `input_path`, `output_dir`, `style_id`, `size`, `position`, `safe_area`, `length`, `overrides`, `captions_path`, `engine`, `language`, `translate_to`, `correct`, `glossary`, `burn`, and `overwrite`. See MCP discovery for typed schemas. Up to 100 files per folder job, two concurrent jobs. Jobs live while the process stays open. Existing outputs are protected unless explicitly overwritten; folder jobs use per-source output directories.
+`caption_video` takes `input_path`, `output_dir`, `style_id`, `size`, `position`, `safe_area`, `length`, `overrides`, `captions_path`, `engine`, `language`, `translate_to`, `correct`, `glossary`, `burn`, and `overwrite`. See MCP discovery for typed schemas. Up to 100 files per folder job, two concurrent jobs. Jobs persist locally across process restarts; use `list_jobs` and `resume_job` to recover. Existing outputs are protected unless explicitly overwritten; folder jobs use per-source output directories.
 
 ### Remote MCP
 
@@ -220,3 +220,30 @@ How burning works: each caption state (one per word for karaoke and emoji) is dr
 ## License
 
 The code is MIT. The bundled [Geist](https://github.com/vercel/geist-font) font is SIL OFL 1.1 (`skills/justcaptions/assets/fonts/OFL.txt`).
+
+
+## Complete first export
+
+After installing Python 3.10+, ffmpeg and the package, run `justcaptions --demo --out-dir ./demo --style word-highlight`. The bundled human-narration sample includes word timestamps and needs no API key or model download. In MCP use `run_demo`, then `get_job`. Narration is attributed in [demo credits](skills/justcaptions/assets/demo/CREDITS.md).
+
+## Durable jobs and account controls
+
+`list_jobs`, `get_job`, `cancel_job` and `resume_job` operate on saved jobs in `~/.local/share/justcaptions` (override with `JUSTCAPTIONS_STATE_DIR`). Resume skips completed files and reuses successful cloud responses. Source files must remain unchanged. An in-flight cloud request can finish and be charged after cancellation. Uncertain cloud requests older than the server replay window require manual usage review rather than silently repeating paid work.
+
+Use `estimate_video` before recognition, supplying known `text_chars` for edits. Estimates exclude unknown future text and do not reserve credit. The API reserves capacity atomically for concurrent requests and all dedicated keys share one account's allowance. Manage monthly spend limits, scoped keys, expiry and revocation at https://justcaptions.com/api/account/. Existing charges and running holds are not removed by lowering a limit.
+
+Setup/export statistics are optional. `JUSTCAPTIONS_METRICS_ID` enables the counters included in copied configurations only when a website visitor opts in. No file paths, captions or API keys are sent by these counters. To disable an installed client's reporting, remove that variable and restart the MCP server.
+
+## Distribution
+
+Install a standard wheel from the latest GitHub release:
+
+```sh
+pip install https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl
+```
+
+GitHub Actions builds and checks wheel/sdist artifacts, attaches them to releases and publishes `server.json` to the official MCP Registry using GitHub OIDC. PyPI publishing uses a trusted publisher when the owner enables it; the website uses the release wheel until that registration is completed.
+
+PyPI pending trusted publisher configuration: project `justcaptions-agent`; GitHub owner `SpaceSheepBoy`; repository `justcaptions-skill`; workflow `release.yml`; environment `pypi`. After registration, enable repository variable `PYPI_PUBLISH_ENABLED=true` and rerun the release workflow.
+
+<!-- mcp-name: io.github.SpaceSheepBoy/justcaptions -->

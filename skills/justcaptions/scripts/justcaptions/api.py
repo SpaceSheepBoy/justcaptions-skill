@@ -4,6 +4,7 @@ Standard library only, so the skill installs with nothing but Pillow.
 """
 
 import json
+import hashlib
 import os
 import re
 import time
@@ -16,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 DEFAULT_BASE = "https://api.justcaptions.com/v1"
 ACCOUNT_URL = "https://justcaptions.com/api/account/"
 KEY_FILE = Path.home() / ".config" / "justcaptions" / "api_key"
+from . import execution
+
 MAX_AUDIO_BYTES = 12_000_000
 TEXT_BATCH = 400
 EMOJI_BATCH = 1000
@@ -77,7 +80,7 @@ def base_url() -> str:
 def build_multipart(fields: Dict[str, str], files: Dict[str, Tuple[str, bytes, str]]) -> Tuple[bytes, str]:
     """fields: name → value. files: name → (filename, bytes, content type).
     Returns (body, Content-Type header)."""
-    boundary = "jc-" + uuid.uuid4().hex
+    boundary = "jc-" + hashlib.sha256(json.dumps(fields, sort_keys=True).encode() + b"".join(data for _, data, _ in files.values())).hexdigest()[:32]
     parts: List[bytes] = []
     for name, value in fields.items():
         parts.append(
@@ -95,9 +98,25 @@ def build_multipart(fields: Dict[str, str], files: Dict[str, Tuple[str, bytes, s
 
 def _request(method: str, path: str, body: Optional[bytes] = None, content_type: Optional[str] = None,
              timeout=180, auth: bool = True):
-    headers = {"User-Agent": "justcaptions-skill/1.2"}
+    execution.check()
+    headers = {"User-Agent": "justcaptions-skill/1.3"}
+    ledger_path = None
+    ledger = None
+    current = execution.context.get()
+    if current and method == "POST" and path in ("/transcribe", "/correct", "/translate", "/emoji"):
+        signature = hashlib.sha256((base_url() + path + (content_type or "")).encode() + (body or b"")).hexdigest()
+        ledger_path = current['work'] / 'requests' / (signature + '.json')
+        if ledger_path.exists():
+            ledger = json.loads(ledger_path.read_text())
+            if 'response' in ledger:
+                return ledger['response']
+            if time.time() - ledger['started'] > 23 * 3600:
+                raise APIError(409, 'recovery_required', 'A pending cloud request is too old to replay safely. Check usage before starting a new job.')
+        else:
+            ledger = {'request_id': uuid.uuid4().hex, 'started': time.time()}
+            execution.atomic_json(ledger_path, ledger)
     if method == "POST" and path in ("/transcribe", "/correct", "/translate", "/emoji"):
-        headers["Idempotency-Key"] = uuid.uuid4().hex
+        headers["Idempotency-Key"] = ledger["request_id"] if ledger else uuid.uuid4().hex
     if auth:
         key = api_key()
         if not key:
@@ -106,10 +125,16 @@ def _request(method: str, path: str, body: Optional[bytes] = None, content_type:
     if content_type:
         headers["Content-Type"] = content_type
     for attempt in range(4):
+        execution.check()
         req = urllib.request.Request(base_url() + path, data=body, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                result = json.loads(resp.read().decode("utf-8"))
+                if ledger_path:
+                    ledger['response'] = result
+                    execution.atomic_json(ledger_path, ledger)
+                execution.check()
+                return result
         except urllib.error.HTTPError as e:
             raw = e.read().decode("utf-8", "replace")
             try:
@@ -177,3 +202,7 @@ def emoji(captions: List[str], language: Optional[str] = None) -> List[Optional[
 
 def usage() -> dict:
     return _request("GET", "/usage")
+
+
+def estimate(audio_seconds=0, text_chars=0) -> dict:
+    return _json("/estimate", {"audio_seconds": audio_seconds, "text_chars": text_chars})

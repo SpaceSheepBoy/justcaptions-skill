@@ -5,6 +5,7 @@
   python3 scripts/jc.py talk.mp4 --translate es --formats srt,vtt
 """
 
+import hashlib
 import argparse
 import json
 import os
@@ -15,7 +16,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from . import api, emoji, formats, media, styles
+from . import api, emoji, formats, media, styles, execution
 from .grouping import Caption, Word, group_words, split_into_words, words_from_segments
 from .transcribe import transcribe
 
@@ -23,6 +24,7 @@ from .transcribe import transcribe
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="jc", description="Add captions to videos, styled like the Just Captions app.")
     p.add_argument("inputs", nargs="*", help="video files or folders (folders are captioned in batch)")
+    p.add_argument("--demo", action="store_true", help="caption the bundled human narration sample without an API key")
     p.add_argument("--burn", action="store_true", help="write <name>.captioned.mp4 with the captions burned in")
     p.add_argument("--style", default=styles.DEFAULT_STYLE, choices=sorted(styles.STYLES))
     p.add_argument("--position", default="bottom", help="top, middle, bottom, or a 0-1 fraction of the height")
@@ -126,21 +128,44 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
     expected = [out_dir / f"{video.stem}.{ext}" for ext in args.formats.split(",") if ext]
     if args.burn:
         expected.append(out_dir / f"{video.stem}.captioned.mp4")
-    if not args.overwrite and any(p.exists() for p in expected):
+    context = execution.context.get()
+    checkpoint = context['work'] if context else None
+    published_path = checkpoint / 'published.json' if checkpoint else None
+    published = json.loads(published_path.read_text()) if published_path and published_path.exists() else {}
+    def owned(path):
+        return str(path) in published and path.is_file() and execution.digest(path) == published[str(path)]
+    if not args.overwrite and any(p.exists() and not owned(p) for p in expected):
         raise RuntimeError("Output already exists. Choose another output directory or explicitly enable overwrite.")
     width, height, duration, audio_codec = media.video_info(video)
     layout = styles.layout_for(width, height)
     glossary = [g.strip() for g in args.glossary.split(",") if g.strip()]
-    work = Path(tempfile.mkdtemp(prefix="jc-"))
+    work = checkpoint or Path(tempfile.mkdtemp(prefix="jc-"))
+    work.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target_dir = out_dir
+    if checkpoint:
+        out_dir = work / 'outputs'
+        out_dir.mkdir(exist_ok=True)
+    def cached(name, action):
+        execution.check()
+        path = work / (name + '.json')
+        if checkpoint and path.exists():
+            data = json.loads(path.read_text())
+            return formats.load_captions_json(data), data.get('language')
+        caps, lang = action()
+        if checkpoint:
+            execution.atomic_json(path, json.loads(formats.to_json(caps, lang)))
+        execution.check()
+        return caps, lang
     outputs: List[Path] = []
     try:
         language = args.language
         progress("transcribing" if not args.captions else "loading_captions")
-        if args.captions:
-            captions = load_captions(Path(args.captions), layout, args.length, style.max_words)
-        else:
-            words, language = transcribe(video, work, duration, args.engine, args.model, args.language, glossary)
-            captions = group_words(words, layout, args.length, style.max_words)
+        def recognize():
+            if args.captions:
+                return load_captions(Path(args.captions), layout, args.length, style.max_words), args.language
+            words, detected = transcribe(video, work, duration, args.engine, args.model, args.language, glossary)
+            return group_words(words, layout, args.length, style.max_words), detected
+        captions, language = cached('transcript', recognize)
         if not captions:
             raise RuntimeError("no speech found")
         print(f"  {len(captions)} captions", file=sys.stderr)
@@ -148,17 +173,20 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
         if args.correct:
             progress("correcting")
             need_key("--correct")
-            fixed = api.correct([c.text for c in captions], language, glossary)
-            captions = [split_into_words(Caption(c.start, c.end, t)) if t != c.text else c for c, t in zip(captions, fixed)]
+            def correction():
+                fixed = api.correct([c.text for c in captions], language, glossary)
+                return [split_into_words(Caption(c.start, c.end, t)) if t != c.text else c for c, t in zip(captions, fixed)], language
+            captions, language = cached('corrected', correction)
         if args.translate:
             progress("translating")
             need_key("--translate")
-            translated = api.translate([c.text for c in captions], args.translate, glossary)
-            captions = [split_into_words(Caption(c.start, c.end, t)) for c, t in zip(captions, translated)]
-            language = args.translate
+            def translation():
+                translated = api.translate([c.text for c in captions], args.translate, glossary)
+                return [split_into_words(Caption(c.start, c.end, t)) for c, t in zip(captions, translated)], args.translate
+            captions, language = cached('translated', translation)
         progress("styling")
         if style.emoji:
-            if api.api_key():
+            if api.api_key() and not args.demo:
                 try:
                     for c, e in zip(captions, api.emoji([c.text for c in captions], language)):
                         c.emoji = e
@@ -171,7 +199,7 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
         for fmt in [f.strip() for f in args.formats.split(",") if f.strip()]:
             if fmt not in writers:
                 raise SystemExit(f"unknown format: {fmt}")
-            path = stem.with_suffix(f".{fmt}")
+            path = out_dir / f"{video.stem}.{fmt}"
             path.write_text(writers[fmt](captions), encoding="utf-8")
             outputs.append(path)
 
@@ -187,11 +215,35 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
             actual = media.video_info(out)
             if actual[:2] != (width, height) or abs(actual[2] - duration) > .25 or (audio_codec and not actual[3]):
                 raise RuntimeError("Rendered video failed dimension, duration or audio verification.")
+        execution.check()
+        if checkpoint:
+            final = []
+            for path in outputs:
+                destination = target_dir / path.name
+                digest = execution.digest(path)
+                # Save ownership before publication so restart can finish a partially published batch.
+                if destination.exists() and not args.overwrite and not owned(destination):
+                    raise RuntimeError('Output was changed by another process. Choose a new output directory.')
+                published[str(destination)] = digest
+                execution.atomic_json(published_path, published)
+                fd, temporary = tempfile.mkstemp(dir=target_dir)
+                os.close(fd)
+                try:
+                    shutil.copyfile(path, temporary)
+                    if args.overwrite or owned(destination):
+                        os.replace(temporary, destination)
+                    else:
+                        os.link(temporary, destination)  # fails safely if another writer wins
+                    final.append(destination)
+                finally:
+                    if os.path.exists(temporary):
+                        os.unlink(temporary)
+            return final
         return outputs
     finally:
         if args.keep_frames:
             print(f"  frames kept in {work}", file=sys.stderr)
-        else:
+        elif not checkpoint:
             shutil.rmtree(work, ignore_errors=True)
 
 
@@ -214,6 +266,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     except api.APIError as e:
         print(api.explain(e), file=sys.stderr)
         return 1
+    if args.demo:
+        from .assets import ASSETS
+        args.inputs = [str(ASSETS / 'demo/story.mp4')]
+        args.captions = str(ASSETS / 'demo/story.json')
+        args.burn = True
+        if not args.out_dir:
+            args.out_dir = './justcaptions-demo'
     if not args.inputs:
         print("give at least one video (or --list-styles). See --help.", file=sys.stderr)
         return 2

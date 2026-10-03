@@ -60,3 +60,8 @@ then rerun with `--captions NAME.json --burn` (JSON keeps word timing for karaok
 This repository also exposes a local MCP (`justcaptions-mcp`) and packaged CLI (`justcaptions`). Setup: https://justcaptions.com/agents/ . Run `check_environment`, `list_styles`, optionally `preview_style`, then `caption_video` and poll `get_job`. The remote MCP at https://api.justcaptions.com/mcp only handles audio and caption text; render with the local tool.
 
 Use `--safe-area tiktok|reels|shorts|none` and `--style-config FILE.json` for validated overrides. `--json` provides structured CLI results. Existing outputs are protected unless the user explicitly requests `--overwrite`. For batch input, avoid duplicate output basenames by using distinct folders. Corrected/translated words have estimated timing. Portable rendering can differ from native iOS fonts/animations. Never describe estimated word timing as aligned to the audio.
+
+
+## MCP, demo and recovery
+
+For an installed MCP, use `run_demo` for the bundled human-narration sample without a Key, `estimate_video` before cloud recognition, `caption_video` to start, and `get_job` to inspect results. `list_jobs` finds durable jobs after restart. `resume_job` retries incomplete/failed files only, retaining successful cloud responses. `cancel_job` stops local work; an already-sent cloud request may finish and be billed. Account controls at https://justcaptions.com/api/account/ create scoped, expiring agent keys and set shared monthly limits.
