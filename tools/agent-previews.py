@@ -15,8 +15,8 @@ folder.mkdir(parents=True, exist_ok=True)
 docs = Path(__file__).resolve().parents[1] / 'docs/styles'
 width, height, fps, duration = 360, 480, 12, 6
 words = [Word(text, start, end) for text, start, end in [
-    ('Make', 0, .8), ('great', .8, 1.7), ('videos', 1.7, 2.7),
-    ('Tell', 3, 3.8), ('your', 3.8, 4.7), ('story', 4.7, 5.7)]]
+    ('Make', 0, .8), ('great', .8, 1.7), ('videos.', 1.7, 2.7),
+    ('Tell', 3, 3.8), ('your', 3.8, 4.7), ('story.', 4.7, 5.7)]]
 for row in styles.catalog()['styles']:
     style = styles.resolve(row['id'])
     captions = group_words(words, max_words=style.max_words)
