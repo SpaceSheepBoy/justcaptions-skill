@@ -12,7 +12,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from . import styles
 from .grouping import Caption, is_compact_script
 
-FONT = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Geist-Black.ttf"
+from .assets import ASSETS
+FONT = ASSETS / "fonts" / "Geist-Black.ttf"
 # Geist covers Latin, Greek and Cyrillic. Other scripts use a system font;
 # an entry with "#n" picks face n of a collection (Hiragino face 2 is W6).
 FALLBACK_FONTS = [
@@ -56,13 +57,22 @@ def needs_fallback(text: str) -> bool:
 
 
 @lru_cache(maxsize=32)
-def _font(size: int, fallback: bool) -> ImageFont.FreeTypeFont:
+def _font(size: int, fallback: bool, family: str = "sans") -> ImageFont.FreeTypeFont:
     if fallback:
         for entry in FALLBACK_FONTS:
             path, _, index = entry.partition("#")
             if Path(path).exists():
                 return ImageFont.truetype(path, size, index=int(index or 0))
         _warn_once("no font for this script found; install Noto Sans CJK")
+    if family != "sans":
+        choices = {
+            "regular": ["/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "C:/Windows/Fonts/arial.ttf"],
+            "serif": ["/System/Library/Fonts/Supplemental/Georgia.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "C:/Windows/Fonts/georgia.ttf"],
+        }
+        for entry in choices[family]:
+            if Path(entry).exists():
+                return ImageFont.truetype(entry, size)
+        _warn_once(f"{family} font unavailable; using bundled Geist")
     return ImageFont.truetype(str(FONT), size)
 
 
@@ -130,12 +140,13 @@ def _wrap(tokens: List[str], widths: List[float], space: float, max_width: float
 
 
 class Renderer:
-    def __init__(self, width: int, height: int, style: styles.Style, size: str = "medium", position: float = 0.82):
+    def __init__(self, width: int, height: int, style: styles.Style, size: str = "medium", position: float = 0.82, safe_area: str = "none"):
         self.W, self.H = width, height
         self.style = style
         self.fs = styles.font_size(width, height, size, style)
         self.position = position
-        self.max_width = width * styles.max_width_fraction(width, height)
+        self.safe = styles.catalog()["safe_areas"][safe_area]
+        self.max_width = width * min(styles.max_width_fraction(width, height), 1 - 2 * self.safe["side"])
 
     def frame(self, caption: Caption, active: Optional[int] = None) -> Image.Image:
         """A full-frame transparent image with the caption drawn in place.
@@ -149,12 +160,12 @@ class Renderer:
         # shrinks (to at most 60%) until it fits on two.
         fs = self.fs
         while True:
-            font = _font(round(fs), fallback)
+            font = _font(max(1, round(fs)), fallback, st.font_family)
             widths = [font.getlength(t) for t in tokens]
             space = font.getlength(" ")
             pad_x, pad_y = styles.text_padding(fs) if st.background else (0.0, 0.0)
             lines = _wrap(tokens, widths, space, self.max_width - 2 * pad_x, joiner)
-            if len(lines) <= 2 or fs <= self.fs * 0.6:
+            if (len(lines) <= 2 and max(widths, default=0) <= self.max_width - 2 * pad_x) or fs <= 2:
                 break
             fs *= 0.92
 
@@ -186,44 +197,78 @@ class Renderer:
                 placed.append((i, x, baseline))
                 x += widths[i] + gap
 
-        if shadow_alpha > 0:
+        if shadow_alpha > 0 and st.animation not in ("word-reveal", "typewriter"):
             mask = Image.new("L", tile.size, 0)
             md = ImageDraw.Draw(mask)
             for i, x, y in placed:
                 md.text((x, y + shadow_y), tokens[i], font=font, anchor="ls", fill=255, stroke_width=stroke, stroke_fill=255)
             mask = mask.filter(ImageFilter.GaussianBlur(max(blur, 0.5)))
-            shade = Image.new("RGBA", tile.size, (0, 0, 0, 255))
+            shade = Image.new("RGBA", tile.size, (*st.outline_color, 255) if st.glow else (0, 0, 0, 255))
             shade.putalpha(mask.point(lambda v: round(v * shadow_alpha)))
             # Over the box (if any), under the text.
             tile = Image.alpha_composite(tile, shade)
 
         draw = ImageDraw.Draw(tile)
+        remaining_chars = active if st.animation == "typewriter" and active is not None else None
         for i, x, y in placed:
+            token = tokens[i]
+            if st.animation == "word-reveal" and active is not None and i > active:
+                continue
+            if remaining_chars is not None:
+                token = token[:max(0, remaining_chars)]
+                remaining_chars -= len(tokens[i]) + (1 if joiner else 0)
+            if st.highlight_box and i == active:
+                draw.rounded_rectangle((x - fs * .12, y - ascent, x + widths[i] + fs * .12, y + descent), radius=fs * .12, fill=st.highlight_color)
             color = st.highlight_color if (st.highlight_color and i == active) else st.text_color
-            draw.text((x, y), tokens[i], font=font, anchor="ls", fill=color,
+            if st.highlight_box and i == active:
+                color = styles.BLACK
+            draw.text((x, y), token, font=font, anchor="ls", fill=color,
                       stroke_width=stroke, stroke_fill=st.outline_color if stroke else None)
 
-        frame = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
-        edge = round(self.H * 0.04)
-        top = round(self.position * self.H - tile.height / 2)
-        top = min(max(top, edge - margin), self.H - tile.height - edge + margin)
-        left = round((self.W - tile.width) / 2)
-        frame.alpha_composite(tile, (max(left, 0), max(top, 0)))
+        if st.animation in ("pop-in", "impact") and active is not None:
+            progress = min(max(active / 8, 0), 1)
+            eased = 1 - (1 - progress) ** 3
+            scale = (.84 + eased * .16 + math.sin(progress * math.pi) * .045) if st.animation == "pop-in" else (1.2 - .2 * eased)
+            tile = tile.resize((max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.LANCZOS)
+            opacity = min(progress * 2, 1)
+            tile.putalpha(tile.getchannel("A").point(lambda v: round(v * opacity)))
 
-        if st.emoji and caption.emoji:
-            side = math.ceil(fs * 1.8)
-            glyph = emoji_image(caption.emoji, side)
+        glyph = emoji_image(caption.emoji, math.ceil(fs * 1.8)) if st.emoji and caption.emoji else None
+        emoji_height = glyph.height + round(fs * .1) if glyph else 0
+        frame = Image.new("RGBA", (self.W, self.H), (0, 0, 0, 0))
+        safe_top = round(self.H * self.safe["top"])
+        safe_bottom = round(self.H * (1 - self.safe["bottom"]))
+        # Fit the complete caption including emoji into the selected safe region.
+        total_h = tile.height + emoji_height
+        max_h = safe_bottom - safe_top
+        if total_h > max_h:
+            scale = max_h / total_h
+            tile = tile.resize((max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.LANCZOS)
             if glyph:
-                box_top = top + margin
-                above = round(box_top - fs * 0.1 - glyph.height)
-                y = above if above >= 0 else round(box_top + box_h + fs * 0.1)
-                frame.alpha_composite(glyph, (round((self.W - glyph.width) / 2), y))
+                glyph = glyph.resize((max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))), Image.Resampling.LANCZOS)
+                emoji_height = glyph.height + round(fs * .1 * scale)
+        top = round(self.position * self.H - tile.height / 2)
+        top = min(max(top, safe_top + emoji_height), safe_bottom - tile.height)
+        frame.alpha_composite(tile, (round((self.W - tile.width) / 2), max(top, 0)))
+        if glyph:
+            frame.alpha_composite(glyph, (round((self.W - glyph.width) / 2), max(0, top - emoji_height)))
         return frame
 
     def states(self, caption: Caption) -> List[Tuple[float, float, Optional[int]]]:
         """(start, end, active word) spans for one caption."""
         n = len([w for w in caption.words if w.text.strip()])
-        if not self.style.highlight_color or n == 0:
+        animation = self.style.animation
+        if animation in ("pop-in", "impact"):
+            entrance = min((caption.end - caption.start) * .32, .4)
+            spans = [(caption.start + entrance * k / 8, caption.start + entrance * (k + 1) / 8, k) for k in range(8)]
+            return spans + [(caption.start + entrance, caption.end, 8)]
+        if animation == "typewriter":
+            count = len(" ".join(_tokens(caption, self.style)))
+            ticks = max(1, min(count, 120))
+            entrance = (caption.end - caption.start) * .65
+            spans = [(caption.start + entrance * k / ticks, caption.start + entrance * (k + 1) / ticks, max(1, round(count * (k + 1) / ticks))) for k in range(ticks)]
+            return spans + [(caption.start + entrance, caption.end, count)]
+        if (not self.style.highlight_color and animation != "word-reveal") or n == 0:
             return [(caption.start, caption.end, None)]
         words = [w for w in caption.words if w.text.strip()]
         spans = []

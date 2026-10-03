@@ -41,6 +41,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--crf", type=int, default=20)
     p.add_argument("--keep-frames", action="store_true", help="keep the rendered PNGs (for debugging)")
     p.add_argument("--list-styles", action="store_true")
+    p.add_argument("--json", action="store_true", help="structured results on stdout")
+    p.add_argument("--style-config", help="JSON file with validated style overrides")
+    p.add_argument("--safe-area", choices=["none", "tiktok", "reels", "shorts"], default="none")
+    p.add_argument("--overwrite", action="store_true", help="replace existing output files")
     p.add_argument("--signup", metavar="EMAIL", help="create a free API key and save it to ~/.config/justcaptions/api_key")
     p.add_argument("--account", "--usage", dest="account", action="store_true",
                    help="show this month's API usage and estimated charge")
@@ -113,7 +117,17 @@ def format_account(u: dict) -> str:
 
 def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[Path]:
     from .render import Renderer  # Pillow is only needed for --burn
-    style = styles.STYLES[args.style]
+    overrides = getattr(args, "style_overrides", None)
+    if args.style_config:
+        overrides = json.loads(Path(args.style_config).read_text(encoding="utf-8"))
+    style = styles.resolve(args.style, overrides)
+    progress = getattr(args, "progress", lambda stage: None)
+    progress("checking")
+    expected = [out_dir / f"{video.stem}.{ext}" for ext in args.formats.split(",") if ext]
+    if args.burn:
+        expected.append(out_dir / f"{video.stem}.captioned.mp4")
+    if not args.overwrite and any(p.exists() for p in expected):
+        raise RuntimeError("Output already exists. Choose another output directory or explicitly enable overwrite.")
     width, height, duration, audio_codec = media.video_info(video)
     layout = styles.layout_for(width, height)
     glossary = [g.strip() for g in args.glossary.split(",") if g.strip()]
@@ -121,6 +135,7 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
     outputs: List[Path] = []
     try:
         language = args.language
+        progress("transcribing" if not args.captions else "loading_captions")
         if args.captions:
             captions = load_captions(Path(args.captions), layout, args.length, style.max_words)
         else:
@@ -131,14 +146,17 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
         print(f"  {len(captions)} captions", file=sys.stderr)
 
         if args.correct:
+            progress("correcting")
             need_key("--correct")
             fixed = api.correct([c.text for c in captions], language, glossary)
             captions = [split_into_words(Caption(c.start, c.end, t)) if t != c.text else c for c, t in zip(captions, fixed)]
         if args.translate:
+            progress("translating")
             need_key("--translate")
             translated = api.translate([c.text for c in captions], args.translate, glossary)
             captions = [split_into_words(Caption(c.start, c.end, t)) for c, t in zip(captions, translated)]
             language = args.translate
+        progress("styling")
         if style.emoji:
             if api.api_key():
                 try:
@@ -159,11 +177,16 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
 
         if args.burn:
             from .burn import build_timeline, burn
-            renderer = Renderer(width, height, style, args.size, position_value(args.position))
+            progress("rendering")
+            renderer = Renderer(width, height, style, args.size, position_value(args.position), args.safe_area)
             concat = build_timeline(captions, renderer, work / "frames", duration)
             out = out_dir / f"{video.stem}.captioned.mp4"
             print("  burning", file=sys.stderr)
             outputs.append(burn(video, concat, out, audio_codec, args.crf))
+            progress("verifying")
+            actual = media.video_info(out)
+            if actual[:2] != (width, height) or abs(actual[2] - duration) > .25 or (audio_codec and not actual[3]):
+                raise RuntimeError("Rendered video failed dimension, duration or audio verification.")
         return outputs
     finally:
         if args.keep_frames:
@@ -175,8 +198,11 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     if args.list_styles:
-        for name, st in styles.STYLES.items():
-            print(f"{name:14} {st.description}")
+        if args.json:
+            print(json.dumps(styles.catalog()))
+        else:
+            for name, st in styles.STYLES.items():
+                print(f"{name:14} {st.description}")
         return 0
     try:
         if args.signup:
@@ -199,21 +225,29 @@ def main(argv: Optional[List[str]] = None) -> int:
         raise SystemExit("no videos found")
 
     failures = 0
+    results = []
     for i, video in enumerate(videos, 1):
         out_dir = Path(args.out_dir) if args.out_dir else video.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         print(f"[{i}/{len(videos)}] {video}", file=sys.stderr)
         started = time.time()
         try:
-            for path in caption_video(video, args, out_dir):
-                print(path)
+            paths = caption_video(video, args, out_dir)
+            results.append({"input": str(video.resolve()), "status": "completed", "outputs": [str(p.resolve()) for p in paths]})
+            if not args.json:
+                for path in paths:
+                    print(path)
             print(f"  done in {time.time() - started:.1f}s", file=sys.stderr)
         except api.APIError as e:
             failures += 1
+            results.append({"input": str(video.resolve()), "status": "failed", "code": e.code, "error": api.explain(e)})
             print(f"  failed: {api.explain(e)}", file=sys.stderr)
-        except RuntimeError as e:
+        except (RuntimeError, ValueError, OSError) as e:
             failures += 1
+            results.append({"input": str(video.resolve()), "status": "failed", "error": str(e)})
             print(f"  failed: {e}", file=sys.stderr)
     if len(videos) > 1:
         print(f"{len(videos) - failures}/{len(videos)} videos captioned", file=sys.stderr)
+    if args.json:
+        print(json.dumps({"results": results, "failed": failures}))
     return 1 if failures else 0

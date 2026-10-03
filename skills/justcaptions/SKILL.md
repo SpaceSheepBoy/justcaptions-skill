@@ -39,7 +39,7 @@ python3 scripts/jc.py --signup you@example.com              # free API key (ask 
 python3 scripts/jc.py --account                             # usage this month, estimated charge
 ```
 
-Options: `--style yellow-box|white-outline|black-box|karaoke|emoji`, `--position top|middle|bottom|0-1`,
+Options: all 15 IDs from `--list-styles --json` (old names remain valid), `--position top|middle|bottom|0-1`,
 `--size small|medium|large`, `--length short|medium|long` (words on screen), `--language en`,
 `--out-dir DIR`, `--engine api|local`. Outputs go next to the input: `NAME.srt`, `NAME.json`,
 `NAME.captioned.mp4`. Output file paths are printed on stdout, progress on stderr.
@@ -54,3 +54,9 @@ then rerun with `--captions NAME.json --burn` (JSON keeps word timing for karaok
    `ffmpeg -v error -ss 3 -i NAME.captioned.mp4 -frames:v 1 -vf scale=540:-1 /tmp/check.png`, then read the image.
    Check the caption is readable, inside the frame, and matches the speech.
 3. Skim `NAME.srt` for obvious recognition mistakes (names, brands) and offer `--glossary` / `--correct`.
+
+## Agent interface
+
+This repository also exposes a local MCP (`justcaptions-mcp`) and packaged CLI (`justcaptions`). Setup: https://justcaptions.com/agents/ . Run `check_environment`, `list_styles`, optionally `preview_style`, then `caption_video` and poll `get_job`. The remote MCP at https://api.justcaptions.com/mcp only handles audio and caption text; render with the local tool.
+
+Use `--safe-area tiktok|reels|shorts|none` and `--style-config FILE.json` for validated overrides. `--json` provides structured CLI results. Existing outputs are protected unless the user explicitly requests `--overwrite`. For batch input, avoid duplicate output basenames by using distinct folders. Corrected/translated words have estimated timing. Portable rendering can differ from native iOS fonts/animations. Never describe estimated word timing as aligned to the audio.

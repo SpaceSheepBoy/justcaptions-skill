@@ -4,7 +4,10 @@ The numbers mirror `CaptionRenderMetrics` and `CaptionStyle` in the app so a
 video captioned here looks like one exported from the app.
 """
 
-from dataclasses import dataclass
+import json
+import re
+from dataclasses import dataclass, replace
+from .assets import ASSETS
 from typing import Optional, Tuple
 
 RGB = Tuple[int, int, int]
@@ -31,50 +34,67 @@ class Style:
     font_multiplier: float = 1.0
     emoji: bool = False
     uppercase: bool = False
+    animation: str = "none"
+    highlight_box: bool = False
+    font_family: str = "sans"
+    glow: bool = False
 
 
-STYLES = {
-    "yellow-box": Style(
-        name="yellow-box",
-        description="Black heavy text on a yellow rounded box (the app's default).",
-        text_color=BLACK,
-        background=YELLOW,
-    ),
-    "white-outline": Style(
-        name="white-outline",
-        description="White text with a thick black outline and soft shadow.",
-        text_color=WHITE,
-        outline_scale=1.5,
-        shadow_strength=2.0,
-    ),
-    "black-box": Style(
-        name="black-box",
-        description="White text on a translucent black rounded box.",
-        text_color=WHITE,
-        background=BLACK,
-        background_opacity=0.68,
-    ),
-    "karaoke": Style(
-        name="karaoke",
-        description="White outlined text; the word being spoken turns yellow.",
-        text_color=WHITE,
-        outline_scale=1.0,
-        shadow_strength=1.0,
-        highlight_color=YELLOW,
-    ),
-    "emoji": Style(
-        name="emoji",
-        description="Three big words at a time, active word highlighted, an emoji above each group.",
-        text_color=WHITE,
-        outline_scale=1.6,
-        shadow_strength=1.0,
-        highlight_color=YELLOW,
-        max_words=3,
-        font_multiplier=1.3,
-        emoji=True,
-        uppercase=True,
-    ),
-}
+def catalog() -> dict:
+    return json.loads((ASSETS / "styles.json").read_text(encoding="utf-8"))
+
+
+def color(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+        raise ValueError("Colors must be #RRGGBB.")
+    return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def _style(row):
+    fields = {k: v for k, v in row.items() if k in Style.__dataclass_fields__}
+    fields["name"] = row["id"]
+    for key in ("text_color", "background", "outline_color", "highlight_color"):
+        if key in fields:
+            fields[key] = color(fields[key])
+    return Style(**fields)
+
+
+STYLES = {row["id"]: _style(row) for row in catalog()["styles"]}
+for alias in catalog()["aliases"]:
+    if "alias_for" in alias:
+        STYLES[alias["id"]] = replace(STYLES[alias["alias_for"]], name=alias["id"])
+    else:
+        STYLES[alias["id"]] = _style(alias)
+
+
+def resolve(style_id: str, overrides=None) -> Style:
+    app_ids = {row["app_style_id"]: row["id"] for row in catalog()["styles"]}
+    key = app_ids.get(style_id, style_id)
+    if key not in STYLES:
+        raise ValueError(f"Unknown style {style_id!r}. Call list_styles first.")
+    changes = dict(overrides or {})
+    unknown = set(changes) - set(catalog()["overrides"])
+    if unknown:
+        raise ValueError(f"Unknown style overrides: {', '.join(sorted(unknown))}")
+    ranges = {"background_opacity": (0, 1), "outline_scale": (0, 3), "shadow_strength": (0, 2), "font_multiplier": (.5, 2)}
+    for k, (low, high) in ranges.items():
+        if k in changes and (type(changes[k]) not in (int, float) or not low <= changes[k] <= high):
+            raise ValueError(f"{k} must be between {low} and {high}.")
+    for k in ("text_color", "background", "outline_color", "highlight_color"):
+        if k in changes:
+            if changes[k] is None and k in ("text_color", "outline_color"):
+                raise ValueError(f"{k} cannot be null.")
+            changes[k] = color(changes[k])
+    if "font_family" in changes and changes["font_family"] not in ("sans", "regular", "serif"):
+        raise ValueError("font_family must be sans, regular or serif.")
+    if "uppercase" in changes and type(changes["uppercase"]) is not bool:
+        raise ValueError("uppercase must be boolean.")
+    if "max_words" in changes and changes["max_words"] is not None and (type(changes["max_words"]) is not int or not 1 <= changes["max_words"] <= 20):
+        raise ValueError("max_words must be an integer from 1 to 20, or null.")
+    return replace(STYLES[key], **changes)
+
 
 DEFAULT_STYLE = "yellow-box"
 
