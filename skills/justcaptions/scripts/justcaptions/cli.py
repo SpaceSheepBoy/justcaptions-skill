@@ -133,7 +133,10 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
     published_path = checkpoint / 'published.json' if checkpoint else None
     published = json.loads(published_path.read_text()) if published_path and published_path.exists() else {}
     def owned(path):
-        return str(path) in published and path.is_file() and execution.digest(path) == published[str(path)]
+        allowed = published.get(str(path), [])
+        if isinstance(allowed,str):
+            allowed = [allowed]
+        return path.is_file() and execution.digest(path) in allowed
     if not args.overwrite and any(p.exists() and not owned(p) for p in expected):
         raise RuntimeError("Output already exists. Choose another output directory or explicitly enable overwrite.")
     width, height, duration, audio_codec = media.video_info(video)
@@ -222,18 +225,23 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
                 destination = target_dir / path.name
                 digest = execution.digest(path)
                 # Save ownership before publication so restart can finish a partially published batch.
-                if destination.exists() and not args.overwrite and not owned(destination):
+                previously_owned = owned(destination)
+                if destination.exists() and not args.overwrite and not previously_owned:
                     raise RuntimeError('Output was changed by another process. Choose a new output directory.')
-                published[str(destination)] = digest
+                prior = published.get(str(destination), [])
+                if isinstance(prior,str): prior = [prior]
+                published[str(destination)] = list(dict.fromkeys(prior + [digest]))
                 execution.atomic_json(published_path, published)
                 fd, temporary = tempfile.mkstemp(dir=target_dir)
                 os.close(fd)
                 try:
                     shutil.copyfile(path, temporary)
-                    if args.overwrite or owned(destination):
+                    if args.overwrite or previously_owned:
                         os.replace(temporary, destination)
                     else:
                         os.link(temporary, destination)  # fails safely if another writer wins
+                    published[str(destination)] = [digest]
+                    execution.atomic_json(published_path,published)
                     final.append(destination)
                 finally:
                     if os.path.exists(temporary):

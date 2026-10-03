@@ -35,7 +35,7 @@ Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/) and 
 ```toml
 [mcp_servers.justcaptions]
 command = "uvx"
-args = ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl", "justcaptions-mcp"]
+args = ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl", "justcaptions-mcp"]
 startup_timeout_sec = 120
 
 [mcp_servers.justcaptions_cloud]
@@ -51,7 +51,7 @@ bearer_token_env_var = "JUSTCAPTIONS_API_KEY"
     "justcaptions": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl", "justcaptions-mcp"]
+      "args": ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl", "justcaptions-mcp"]
     },
     "justcaptions_cloud": {
       "type": "http",
@@ -239,7 +239,7 @@ Setup/export statistics are optional. `JUSTCAPTIONS_METRICS_ID` enables the coun
 Install a standard wheel from the latest GitHub release:
 
 ```sh
-pip install https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl
+pip install https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl
 ```
 
 GitHub Actions builds and checks wheel/sdist artifacts, attaches them to releases and publishes `server.json` to the official MCP Registry using GitHub OIDC. PyPI publishing uses a trusted publisher when the owner enables it; the website uses the release wheel until that registration is completed.
