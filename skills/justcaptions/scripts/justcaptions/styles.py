@@ -1,7 +1,7 @@
-"""Caption styles and layout metrics, ported from the Just Captions iOS app.
+"""Portable caption presets and layout metrics inspired by the Just Captions app.
 
-The numbers mirror `CaptionRenderMetrics` and `CaptionStyle` in the app so a
-video captioned here looks like one exported from the app.
+The versioned catalog controls the renderer; fonts and sampled animations may
+differ from native iOS exports.
 """
 
 import json
