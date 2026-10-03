@@ -1,12 +1,14 @@
 """Speech to timed words: Just Captions API when a key is set, else local
 faster-whisper."""
 
+import json
+import os
 import math
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from . import api, media
+from . import api, media, execution
 from .grouping import Word, words_from_segments
 
 NO_ENGINE = """No transcription engine available. Pick one:
@@ -27,8 +29,28 @@ def _api_words(result: dict, offset: float) -> List[Word]:
     return words_from_segments(segs)
 
 
+def _extract(video, destination, start=0., duration=0.):
+    if not execution.context.get():
+        return media.extract_audio(video,destination,start=start,duration=duration)
+    execution.check()
+    marker=destination.with_suffix('.ready.json')
+    if marker.exists():
+        saved=json.loads(marker.read_text())
+        if destination.is_file() and execution.digest(destination)==saved['sha256']:
+            return destination
+        raise RuntimeError('Cached audio was changed. Review cloud usage before starting a new job.')
+    temporary=destination.with_name(destination.stem+'.pending.m4a')
+    try:
+        media.extract_audio(video,temporary,start=start,duration=duration)
+        os.replace(temporary,destination)
+        execution.atomic_json(marker,{'sha256':execution.digest(destination)})
+        return destination
+    finally:
+        if temporary.exists():temporary.unlink()
+
+
 def transcribe_api(video: Path, workdir: Path, duration: float, language: Optional[str], glossary: List[str]) -> Tuple[List[Word], Optional[str]]:
-    audio = media.extract_audio(video, workdir / "audio.m4a")
+    audio = _extract(video, workdir / "audio.m4a")
     size = audio.stat().st_size
     if size <= api.MAX_AUDIO_BYTES:
         result = api.transcribe(audio.read_bytes(), audio.name, language, glossary)
@@ -41,7 +63,7 @@ def transcribe_api(video: Path, workdir: Path, duration: float, language: Option
     words: List[Word] = []
     detected = language
     for i in range(slices):
-        part = media.extract_audio(video, workdir / f"audio-{i}.m4a", start=i * span, duration=span)
+        part = _extract(video, workdir / f"audio-{i}.m4a", start=i * span, duration=span)
         print(f"  transcribing part {i + 1}/{slices}", file=sys.stderr)
         result = api.transcribe(part.read_bytes(), part.name, language or detected, glossary)
         detected = detected or result.get("language")
@@ -54,7 +76,7 @@ def transcribe_local(video: Path, workdir: Path, model_name: str, language: Opti
         from faster_whisper import WhisperModel
     except ImportError:
         raise SystemExit(NO_ENGINE) from None
-    audio = media.extract_audio(video, workdir / "audio.m4a")
+    audio = _extract(video, workdir / "audio.m4a")
     print(f"  loading faster-whisper '{model_name}' (first run downloads it)", file=sys.stderr)
     model = WhisperModel(model_name, device="auto", compute_type="int8")
     segments, info = model.transcribe(

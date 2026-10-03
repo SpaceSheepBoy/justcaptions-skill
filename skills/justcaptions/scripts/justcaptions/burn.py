@@ -11,7 +11,7 @@ from typing import List
 
 from PIL import Image
 
-from . import media
+from . import media, execution
 from .grouping import Caption
 from .render import Renderer
 
@@ -28,6 +28,7 @@ def build_timeline(captions: List[Caption], renderer: Renderer, frames_dir: Path
     n = 0
     for caption in sorted(captions, key=lambda c: c.start):
         for start, end, active in renderer.states(caption):
+            execution.check()
             start, end = max(start, cursor), min(end, duration or end)
             if end - start < 0.001:
                 continue

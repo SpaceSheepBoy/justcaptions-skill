@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.1",
+        "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.0/justcaptions_agent-1.3.0-py3-none-any.whl",
         "justcaptions-mcp"
       ]
     }
