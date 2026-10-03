@@ -2,7 +2,7 @@
 
 Caption videos from Codex, Claude Code, any MCP client, or your terminal. This skill transcribes the speech, makes SRT/VTT/JSON files, and burns TikTok/Reels-style captions into the video. It does one video or a whole folder at a time.
 
-15 portable presets follow the [Just Captions](https://apps.apple.com/app/id6770354079) app style families. Typography and sampled animations can differ from native iOS. Rendering runs on your machine with Pillow and ffmpeg.
+15 animated portable presets follow the [Just Captions](https://apps.apple.com/app/id6770354079) app style families. Typography and sampled animations can differ from native iOS. Rendering runs on your machine with Pillow and ffmpeg.
 
 [Choose a style and copy a task](https://justcaptions.com/agents/) · [API docs](https://justcaptions.com/api/) · [OpenAPI](https://justcaptions.com/openapi.json) · [Style catalog](https://justcaptions.com/styles.json)
 
@@ -35,8 +35,12 @@ Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/) and 
 ```toml
 [mcp_servers.justcaptions]
 command = "uvx"
-args = ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.0", "justcaptions-mcp"]
+args = ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.1", "justcaptions-mcp"]
 startup_timeout_sec = 120
+
+[mcp_servers.justcaptions_cloud]
+url = "https://api.justcaptions.com/mcp"
+bearer_token_env_var = "JUSTCAPTIONS_API_KEY"
 ```
 
 **Claude Code** — merge into your project's `.mcp.json`:
@@ -47,7 +51,12 @@ startup_timeout_sec = 120
     "justcaptions": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.0", "justcaptions-mcp"]
+      "args": ["--from", "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.1", "justcaptions-mcp"]
+    },
+    "justcaptions_cloud": {
+      "type": "http",
+      "url": "https://api.justcaptions.com/mcp",
+      "headers": {"Authorization": "Bearer ${JUSTCAPTIONS_API_KEY}"}
     }
   }
 }
@@ -89,6 +98,8 @@ For Claude Code, a project `.mcp.json` entry:
 Tools: `list_styles`, `get_pricing`, `get_usage`, `transcribe_audio`, `correct_captions`, `translate_captions`, `pick_emojis`. Cloud operations use the existing API pricing and limits. Supply a unique `request_id` and reuse it only for identical retries. Request hashes and completed replies have a 24-hour replay window, then are removed on a subsequent request or daily cleanup (within 48 hours). The replay store does not retain audio.
 
 ## Styles and customization
+
+All 15 presets animate in video exports and the website previews, using spoken-word highlights/reveals, pop entrances, fades, typewriting or a pulsing glow.
 
 The authoritative versioned catalog is [`skills/justcaptions/assets/styles.json`](skills/justcaptions/assets/styles.json): Emoji, Mega, Reveal, Neon, White box, Yellow box, Gray box, Yellow outline, Word Highlight, Highlight Box, Impact, Pop In, Typewriter, Cinema and Editorial. Historical `karaoke`, `black-box` and `white-outline` CLI names remain supported. App IDs such as `wordHighlight` resolve to their portable preset IDs.
 
@@ -200,6 +211,7 @@ Install in an isolated environment with `uv pip install -e .`. The worker MCP ad
 ```bash
 python3 -m unittest discover -s tests
 python3 tools/smoke-mcp.py  # exercise the installed MCP with synthetic media
+python3 tools/agent-previews.py --site SITE_DIR  # regenerate videos/posters and animated README previews
 python3 tools/gallery.py   # regenerate the legacy five-style PNG gallery
 ```
 

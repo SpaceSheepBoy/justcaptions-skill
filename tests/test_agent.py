@@ -24,7 +24,9 @@ class AgentTests(unittest.TestCase):
         for row in styles.catalog()['styles']:
             renderer=Renderer(540,960,styles.resolve(row['id']),'large',.92,'tiktok')
             states=renderer.states(caption)
-            if row['animation'] != 'none': self.assertGreater(len(states),1,row['id'])
+            self.assertNotEqual(row['animation'],'none',row['id'])
+            self.assertGreater(len(states),1,row['id'])
+            self.assertGreater(len({renderer.frame(caption,state).tobytes() for _,_,state in states}),1,row['id'])
             img=renderer.frame(caption,states[-1][2]);box=img.getbbox()
             self.assertIsNotNone(box,row['id'])
             self.assertGreaterEqual(box[1],96,row['id']);self.assertLessEqual(box[3],749,row['id'])
