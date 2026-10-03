@@ -17,7 +17,7 @@ export async function handleMcpRequest(request, { handleAPI, catalog }) {
       'Access-Control-Allow-Headers': 'Authorization, Content-Type, Mcp-Protocol-Version, Mcp-Session-Id',
     } });
   }
-  const server = new McpServer({ name: 'justcaptions', version: '1.2.0' }, {
+  const server = new McpServer({ name: 'justcaptions', version: '1.2.1' }, {
     instructions: 'This remote MCP transcribes audio and edits caption text. It does not read local files or render MP4. For local video captioning, style previews and rendering, install the open-source Just Captions local MCP at https://justcaptions.com/agents/. Paid tools require Authorization: Bearer with your Just Captions API key. Use pricing and get_usage before paid calls. Preserve segments and word timestamps separately from corrected text.',
     maxToolInputElements: 10000,
   });

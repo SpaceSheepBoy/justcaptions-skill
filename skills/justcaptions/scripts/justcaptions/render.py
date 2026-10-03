@@ -175,6 +175,8 @@ class Renderer:
         block_w, block_h = max(line_widths), line_h * len(lines)
         stroke = round(styles.outline_width(fs, st.outline_scale)) if st.outline_scale else 0
         blur, shadow_y, shadow_alpha = styles.shadow(fs, st.shadow_strength)
+        if st.animation == "glow-pulse" and active is not None:
+            shadow_alpha *= .35 + .65 * (.5 - .5 * math.cos(active * math.pi / 12))
         margin = math.ceil(stroke + blur * 2 + shadow_y + fs * 0.12)
 
         box_w = math.ceil(block_w + 2 * pad_x)
@@ -225,12 +227,13 @@ class Renderer:
             draw.text((x, y), token, font=font, anchor="ls", fill=color,
                       stroke_width=stroke, stroke_fill=st.outline_color if stroke else None)
 
-        if st.animation in ("pop-in", "impact") and active is not None:
+        if st.animation in ("pop-in", "impact", "fade-in") and active is not None:
             progress = min(max(active / 8, 0), 1)
             eased = 1 - (1 - progress) ** 3
-            scale = (.84 + eased * .16 + math.sin(progress * math.pi) * .045) if st.animation == "pop-in" else (1.2 - .2 * eased)
-            tile = tile.resize((max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.LANCZOS)
-            opacity = min(progress * 2, 1)
+            scale = (.84 + eased * .16 + math.sin(progress * math.pi) * .045) if st.animation == "pop-in" else (1.2 - .2 * eased) if st.animation == "impact" else 1
+            if scale != 1:
+                tile = tile.resize((max(1, round(tile.width * scale)), max(1, round(tile.height * scale))), Image.Resampling.LANCZOS)
+            opacity = eased if st.animation == "fade-in" else min(progress * 2, 1)
             tile.putalpha(tile.getchannel("A").point(lambda v: round(v * opacity)))
 
         glyph = emoji_image(caption.emoji, math.ceil(fs * 1.8)) if st.emoji and caption.emoji else None
@@ -258,7 +261,11 @@ class Renderer:
         """(start, end, active word) spans for one caption."""
         n = len([w for w in caption.words if w.text.strip()])
         animation = self.style.animation
-        if animation in ("pop-in", "impact"):
+        if animation == "glow-pulse":
+            ticks = max(2, math.ceil((caption.end - caption.start) * 12))
+            step = (caption.end - caption.start) / ticks
+            return [(caption.start + step * k, caption.start + step * (k + 1), k % 24) for k in range(ticks)]
+        if animation in ("pop-in", "impact", "fade-in"):
             entrance = min((caption.end - caption.start) * .32, .4)
             spans = [(caption.start + entrance * k / 8, caption.start + entrance * (k + 1) / 8, k) for k in range(8)]
             return spans + [(caption.start + entrance, caption.end, 8)]

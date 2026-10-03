@@ -17,7 +17,7 @@ async def main():
    for name in ['check_environment','list_styles']:
     res=await session.call_tool(name,{});assert not res.isError;print(name,'OK')
    res=await session.call_tool('preview_style',{'style_id':'highlight-box'});assert not res.isError;assert any(x.type=='image' for x in res.content);print('preview_style OK')
-   for style in ['word-highlight','reveal','pop-in','typewriter','impact']:
+   for style in ['word-highlight','reveal','pop-in','typewriter','impact','neon','white-box','gray-box','yellow-outline','cinematic','editorial']:
     result=await session.call_tool('caption_video',{'input_path':str(video),'captions_path':str(cap),'output_dir':str(out/style),'style_id':style,'overwrite':True})
     assert not result.isError,result
     result=result.structuredContent;job=result['job_id']
