@@ -6,13 +6,25 @@ Caption videos from Codex, Claude Code, any MCP client, or your terminal. This s
 
 [Choose a style and copy a task](https://justcaptions.com/agents/) · [API docs](https://justcaptions.com/api/) · [OpenAPI](https://justcaptions.com/openapi.json) · [Style catalog](https://justcaptions.com/styles.json)
 
-| yellow-box (default) | white-outline | black-box |
+| Emoji | Mega | Reveal |
 | --- | --- | --- |
-| ![yellow-box](docs/styles/yellow-box.png) | ![white-outline](docs/styles/white-outline.png) | ![black-box](docs/styles/black-box.png) |
+| ![Emoji](docs/styles/emoji.webp) | ![Mega](docs/styles/mega.webp) | ![Reveal](docs/styles/reveal.webp) |
 
-| karaoke | emoji |
-| --- | --- |
-| ![karaoke](docs/styles/karaoke.png) | ![emoji](docs/styles/emoji.png) |
+| Neon | White box | Yellow box |
+| --- | --- | --- |
+| ![Neon](docs/styles/neon.webp) | ![White box](docs/styles/white-box.webp) | ![Yellow box](docs/styles/yellow-box.webp) |
+
+| Gray box | Yellow outline | Word Highlight |
+| --- | --- | --- |
+| ![Gray box](docs/styles/gray-box.webp) | ![Yellow outline](docs/styles/yellow-outline.webp) | ![Word Highlight](docs/styles/word-highlight.webp) |
+
+| Highlight Box | Impact | Pop In |
+| --- | --- | --- |
+| ![Highlight Box](docs/styles/highlight-box.webp) | ![Impact](docs/styles/impact.webp) | ![Pop In](docs/styles/pop-in.webp) |
+
+| Typewriter | Cinema | Editorial |
+| --- | --- | --- |
+| ![Typewriter](docs/styles/typewriter.webp) | ![Cinema](docs/styles/cinematic.webp) | ![Editorial](docs/styles/editorial.webp) |
 
 ## MCP quickstart
 
