@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "justcaptions": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/SpaceSheepBoy/justcaptions-skill@v1.2.0",
+        "justcaptions-mcp"
+      ]
+    }
+  }
+}

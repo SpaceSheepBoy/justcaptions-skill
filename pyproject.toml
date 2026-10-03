@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "justcaptions-agent"
+version = "1.2.0"
+description = "Open-source MCP and CLI for styled video captions, local rendering and the Just Captions API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["Pillow>=10,<13", "mcp>=1.14,<2"]
+
+[project.optional-dependencies]
+local = ["faster-whisper>=1,<2"]
+
+[project.scripts]
+justcaptions = "justcaptions.cli:main"
+justcaptions-mcp = "justcaptions.mcp_server:main"
+
+[project.urls]
+Homepage = "https://justcaptions.com/agents/"
+Repository = "https://github.com/SpaceSheepBoy/justcaptions-skill"
+
+[tool.hatch.build.targets.wheel]
+packages = ["skills/justcaptions/scripts/justcaptions"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/justcaptions/assets" = "justcaptions/assets"

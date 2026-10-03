@@ -95,7 +95,9 @@ def build_multipart(fields: Dict[str, str], files: Dict[str, Tuple[str, bytes, s
 
 def _request(method: str, path: str, body: Optional[bytes] = None, content_type: Optional[str] = None,
              timeout=180, auth: bool = True):
-    headers = {"User-Agent": "justcaptions-skill/1.1"}
+    headers = {"User-Agent": "justcaptions-skill/1.2"}
+    if method == "POST" and path in ("/transcribe", "/correct", "/translate", "/emoji"):
+        headers["Idempotency-Key"] = uuid.uuid4().hex
     if auth:
         key = api_key()
         if not key:

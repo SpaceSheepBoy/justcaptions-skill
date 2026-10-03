@@ -1,0 +1,685 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Just Captions API",
+    "version": "1.2.0",
+    "description": "Timed captions and AI text edits. Video rendering runs locally through the open-source MCP/CLI. https://justcaptions.com/agents/"
+  },
+  "servers": [
+    {
+      "url": "https://api.justcaptions.com/v1"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "get_health",
+        "summary": "API liveness",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        },
+        "security": []
+      }
+    },
+    "/pricing": {
+      "get": {
+        "operationId": "get_pricing",
+        "summary": "Current prices and free monthly allowances",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        },
+        "security": []
+      }
+    },
+    "/styles": {
+      "get": {
+        "operationId": "get_styles",
+        "summary": "15 local rendering presets, versioned overrides, aliases and platform safe areas",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        },
+        "security": []
+      }
+    },
+    "/usage": {
+      "get": {
+        "operationId": "get_usage",
+        "summary": "Monthly usage, estimated bill and spend cap",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        }
+      }
+    },
+    "/transcribe": {
+      "post": {
+        "operationId": "post_transcribe",
+        "summary": "Extracted audio to timed captions; max 12 MB decoded",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          },
+          "409": {
+            "description": "idempotency_conflict or request_in_progress"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "audio_base64": {
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "glossary": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "srt",
+                      "vtt"
+                    ],
+                    "default": "json"
+                  }
+                },
+                "required": [
+                  "audio_base64"
+                ]
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "glossary": {
+                    "type": "string",
+                    "description": "Comma-separated glossary terms"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "srt",
+                      "vtt"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "description": "Reuse for identical retries within 24 hours. Different input with the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/correct": {
+      "post": {
+        "operationId": "post_correct",
+        "summary": "Correct up to 400 captions / 80,000 input characters; keep count and order",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          },
+          "409": {
+            "description": "idempotency_conflict or request_in_progress"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "captions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 400,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "glossary": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "captions"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "description": "Reuse for identical retries within 24 hours. Different input with the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/translate": {
+      "post": {
+        "operationId": "post_translate",
+        "summary": "Translate captions; text edits do not realign word timing",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          },
+          "409": {
+            "description": "idempotency_conflict or request_in_progress"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "captions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 400,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "target_language": {
+                    "type": "string"
+                  },
+                  "glossary": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "captions",
+                  "target_language"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "description": "Reuse for identical retries within 24 hours. Different input with the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/emoji": {
+      "post": {
+        "operationId": "post_emoji",
+        "summary": "One emoji per caption, null when unavailable",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          },
+          "409": {
+            "description": "idempotency_conflict or request_in_progress"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "captions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "language": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "captions"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "description": "Reuse for identical retries within 24 hours. Different input with the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/signup": {
+      "post": {
+        "operationId": "post_signup",
+        "summary": "Create a free API key, shown once; no card required",
+        "responses": {
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/keys/rotate": {
+      "post": {
+        "operationId": "post_keys_rotate",
+        "summary": "Replace the API secret; the old key stops working immediately",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        }
+      }
+    },
+    "/billing/checkout": {
+      "post": {
+        "operationId": "post_billing_checkout",
+        "summary": "Create a Stripe checkout link; user completes payment details",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        }
+      }
+    },
+    "/billing/portal": {
+      "post": {
+        "operationId": "post_billing_portal",
+        "summary": "Create a Stripe billing portal link",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "401": {
+            "description": "invalid_api_key"
+          },
+          "402": {
+            "description": "payment_required"
+          },
+          "429": {
+            "description": "quota_exceeded, free_tier_busy, spend_cap_reached or rate_limited"
+          },
+          "503": {
+            "description": "Provider or service unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "jc_live_<32 alphanumeric characters>"
+      }
+    },
+    "schemas": {}
+  }
+}

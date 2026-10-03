@@ -9,7 +9,8 @@ from typing import Dict, List, Optional
 
 from .grouping import Caption, is_compact_script
 
-TABLE = Path(__file__).resolve().parents[2] / "assets" / "emoji-keywords.json"
+from .assets import ASSETS
+TABLE = ASSETS / "emoji-keywords.json"
 # Every group gets an emoji, as in the app: when no word matches, pick a
 # stable one from this set by the caption's text.
 MOOD = ["✨", "🔥", "💡", "👀", "🎯", "💬", "🙌", "⭐"]
