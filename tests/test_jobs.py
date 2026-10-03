@@ -79,6 +79,23 @@ class JobsTests(unittest.TestCase):
                 outputs[0].write_text('user changed this')
                 with self.assertRaisesRegex(RuntimeError,'already exists'):cli.caption_video(source,args,out)
         finally:execution.context.reset(token)
+    def test_partial_output_publication_keeps_old_and_new_ownership_until_commit(self):
+        work=Path(self.temp.name)/'work';source=Path(self.temp.name)/'clip.mp4';source.write_bytes(b'fixture');out=Path(self.temp.name)/'out';out.mkdir()
+        token=execution.context.set({'work':work,'cancelled':lambda:False});args=cli.parse_args(['--formats','srt,json'])
+        try:
+            with patch.object(media,'video_info',return_value=(360,480,2,'')),patch('justcaptions.cli.transcribe',return_value=([Word('Hello',0,1)],'en')):
+                cli.caption_video(source,args,out)
+                original=(out/'clip.srt').read_text()
+                replace=os.replace
+                def fail_publication(temp,destination):
+                    if Path(destination)==out/'clip.srt':raise RuntimeError('publication interrupted')
+                    return replace(temp,destination)
+                with patch('justcaptions.formats.to_srt',return_value='new deterministic formatting'),patch('os.replace',side_effect=fail_publication):
+                    with self.assertRaisesRegex(RuntimeError,'publication interrupted'):cli.caption_video(source,args,out)
+                self.assertEqual((out/'clip.srt').read_text(),original)
+                with patch('justcaptions.formats.to_srt',return_value='new deterministic formatting'):cli.caption_video(source,args,out)
+                self.assertEqual((out/'clip.srt').read_text(),'new deterministic formatting')
+        finally:execution.context.reset(token)
     def test_audio_checkpoint_retains_exact_request_bytes(self):
         from justcaptions.transcribe import _extract
         work=Path(self.temp.name);token=execution.context.set({'work':work,'cancelled':lambda:False})
