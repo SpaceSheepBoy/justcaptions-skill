@@ -2,8 +2,8 @@
   "name": "justcaptions",
   "description": "Just Captions: open-source video captioning for Claude Code.",
   "owner": {
-    "name": "Just Captions",
-    "url": "https://justcaptions.com"
+    "name": "SpaceSheepBoy",
+    "url": "https://github.com/SpaceSheepBoy"
   },
   "plugins": [
     {

@@ -9,6 +9,7 @@ description = "Open-source MCP and CLI for styled video captions, local renderin
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [{ name = "SpaceSheepBoy" }]
 dependencies = ["Pillow>=10,<13", "mcp>=1.14,<2"]
 
 [project.optional-dependencies]
