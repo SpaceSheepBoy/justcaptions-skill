@@ -3,7 +3,7 @@
   "name": "io.github.SpaceSheepBoy/justcaptions",
   "description": "Audio transcription, caption correction, translation and 15 animated video caption styles.",
   "repository": {"url": "https://github.com/SpaceSheepBoy/justcaptions-skill", "source": "github"},
-  "version": "1.3.1",
+  "version": "1.4.0",
   "websiteUrl": "https://justcaptions.com/agents/",
   "remotes": [{"type": "streamable-http", "url": "https://api.justcaptions.com/mcp", "headers": [{"name": "Authorization", "description": "Bearer followed by your Just Captions API key", "isRequired": true, "isSecret": true}]}]
 }

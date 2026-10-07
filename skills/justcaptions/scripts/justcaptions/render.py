@@ -57,13 +57,21 @@ def needs_fallback(text: str) -> bool:
 
 
 @lru_cache(maxsize=32)
-def _font(size: int, fallback: bool, family: str = "sans") -> ImageFont.FreeTypeFont:
+def _font(size: int, fallback: bool, family: str = "sans", font_id: Optional[str] = None) -> ImageFont.FreeTypeFont:
     if fallback:
         for entry in FALLBACK_FONTS:
             path, _, index = entry.partition("#")
             if Path(path).exists():
                 return ImageFont.truetype(path, size, index=int(index or 0))
         _warn_once("no font for this script found; install Noto Sans CJK")
+    if font_id is not None:
+        row = next((f for f in styles.catalog()["fonts"] if f["id"] == font_id), None)
+        if row is None:
+            raise ValueError(f"Unknown font_id: {font_id}")
+        font = ImageFont.truetype(str(ASSETS / "fonts" / row["file"]), size)
+        if row["variation_axes"]:
+            font.set_variation_by_axes(row["variation_axes"])
+        return font
     if family != "sans":
         choices = {
             "regular": ["/System/Library/Fonts/Supplemental/Arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "C:/Windows/Fonts/arial.ttf"],
@@ -160,7 +168,7 @@ class Renderer:
         # shrinks (to at most 60%) until it fits on two.
         fs = self.fs
         while True:
-            font = _font(max(1, round(fs)), fallback, st.font_family)
+            font = _font(max(1, round(fs)), fallback, st.font_family, st.font_id)
             widths = [font.getlength(t) for t in tokens]
             space = font.getlength(" ")
             pad_x, pad_y = styles.text_padding(fs) if st.background else (0.0, 0.0)

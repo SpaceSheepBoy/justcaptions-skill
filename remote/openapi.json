@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Just Captions API",
-    "version": "1.3.1",
+    "version": "1.4.0",
     "description": "Timed captions and AI text edits. Video rendering runs locally through the open-source MCP/CLI. https://justcaptions.com/agents/"
   },
   "servers": [
@@ -930,6 +930,25 @@
             }
           }
         ]
+      }
+    },
+    "/fonts": {
+      "get": {
+        "operationId": "get_fonts",
+        "summary": "Named fonts, stable IDs, licenses and script coverage for local rendering",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Font catalog. Use font_id in local MCP/CLI style overrides.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

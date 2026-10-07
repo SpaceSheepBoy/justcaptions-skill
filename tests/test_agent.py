@@ -19,6 +19,32 @@ class AgentTests(unittest.TestCase):
         for changes in [{'random':True},{'font_multiplier':0},{'uppercase':'false'},{'text_color':None},{'max_words':2.5},{'background_opacity':float('nan')}]:
             with self.assertRaises(ValueError): styles.resolve('mega', changes)
 
+    def test_named_fonts_are_packaged_and_render_distinctly(self):
+        import hashlib
+        from justcaptions.assets import ASSETS
+        from justcaptions.render import _font
+        caption = Caption(0, 2, 'Make great videos', [Word('Make', 0, .6), Word('great', .6, 1.3), Word('videos', 1.3, 2)])
+        images = set()
+        self.assertEqual(len(styles.font_catalog()['fonts']), 13)
+        for row in styles.font_catalog()['fonts']:
+            path = ASSETS / 'fonts' / row['file']
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row['sha256'])
+            self.assertTrue((ASSETS / 'fonts' / row['license_file']).is_file())
+            style = styles.resolve('white-box', {'font_id': row['id']})
+            self.assertEqual(Path(_font(42, False, 'serif', row['id']).path), path)
+            image = Renderer(540, 960, style).frame(caption)
+            self.assertIsNotNone(image.getbbox())
+            images.add(image.tobytes())
+        self.assertEqual(len(images), 13, 'Every named font must produce different typography')
+
+    def test_named_font_validation_and_generic_compatibility(self):
+        self.assertIsNone(styles.resolve('editorial').font_id)
+        self.assertEqual(styles.resolve('editorial', {'font_id': None}).font_family, 'serif')
+        self.assertEqual(styles.resolve('editorial', {'font_id': 'anton'}).font_id, 'anton')
+        for value in ['unknown', '../font.ttf', '', 123, {}, []]:
+            with self.assertRaises(ValueError):
+                styles.resolve('mega', {'font_id': value})
+
     def test_animated_states_and_safe_area_in_all_styles(self):
         caption=Caption(0,2,'Make great videos',[Word('Make',0,.6),Word('great',.6,1.3),Word('videos',1.3,2)],'✨')
         for row in styles.catalog()['styles']:

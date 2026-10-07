@@ -16,7 +16,7 @@ from .assets import ASSETS
 from .grouping import group_words, words_from_segments
 from .render import Renderer
 
-mcp = FastMCP("Just Captions", instructions="Use list_styles and check_environment first. For local videos call caption_video, then poll get_job until completed, failed or cancelled. Jobs persist across restarts; use list_jobs and resume_job to recover. Rendering stays local. API transcription sends extracted audio; AI edits send caption text. Keep API keys out of tool arguments. Existing output files are protected unless overwrite is explicitly requested.")
+mcp = FastMCP("Just Captions", instructions="Use list_styles, list_fonts and check_environment first. For local videos call caption_video, then poll get_job until completed, failed or cancelled. Jobs persist across restarts; use list_jobs and resume_job to recover. Rendering stays local. API transcription sends extracted audio; AI edits send caption text. Keep API keys out of tool arguments. Existing output files are protected unless overwrite is explicitly requested.")
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False)
 TASKS = set()
@@ -36,6 +36,14 @@ def check_environment() -> dict[str, Any]:
 def list_styles() -> dict[str, Any]:
     """Return 15 portable presets, supported overrides, aliases and conservative platform safe areas."""
     return styles.catalog()
+
+
+@mcp.tool(annotations=READ, structured_output=True)
+def list_fonts() -> dict[str, Any]:
+    """List bundled named fonts, IDs, licenses and script coverage for local rendering.
+    Pass overrides={"font_id": "anton"} to preview_style or caption_video.
+    """
+    return styles.font_catalog()
 
 
 @mcp.tool(annotations=READ, structured_output=True)

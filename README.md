@@ -109,6 +109,8 @@ The local MCP accepts `overrides`, for example:
 {"highlight_color":"#1A9E7A","text_color":"#FFFFFF","font_multiplier":1.2,"max_words":3}
 ```
 
+Named fonts are bundled for predictable local rendering. Run `justcaptions --list-fonts` or call MCP `list_fonts`; the public `GET /v1/fonts` endpoint returns the same catalog. Set `{"font_id":"anton"}` in overrides or a style config file. The 13 choices include Inter, Poppins, Montserrat, Merriweather, Bebas Neue, Oswald, Roboto Flex, Anton, Barlow Condensed, Nunito, Caveat, Patrick Hand and Permanent Marker. Variable fonts use the catalog's bold axis settings. A named font takes precedence over `font_family`; `"font_id":null` restores generic family selection. These named fonts target Latin captions; other scripts retain the renderer's system font fallback. SRT/VTT remain plain subtitles and do not embed fonts.
+
 The CLI takes the same object in `--style-config FILE.json`. Unknown keys and invalid values are rejected. Colors, backgrounds, outlines, font families, size, word count and letter case are configurable. Use `--safe-area tiktok|reels|shorts|none`; conservative margins keep captions horizontally centered. Platform UI layouts can vary.
 
 Recognition word timestamps are retained when text is unchanged. Corrected/translated text and imported subtitle-only files use **estimated word timing**, not forced alignment. Serif/regular families use available system fonts, with a bundled Geist fallback.
@@ -219,7 +221,7 @@ How burning works: each caption state (one per word for karaoke and emoji) is dr
 
 ## License
 
-The code is MIT. The bundled [Geist](https://github.com/vercel/geist-font) font is SIL OFL 1.1 (`skills/justcaptions/assets/fonts/OFL.txt`).
+The code is MIT. Named font licenses and original source URLs are recorded in the catalog; license texts are included in `assets/fonts/licenses/` (SIL OFL 1.1, plus Apache 2.0 for Permanent Marker). The bundled [Geist](https://github.com/vercel/geist-font) font is SIL OFL 1.1 (`skills/justcaptions/assets/fonts/OFL.txt`).
 
 
 ## Complete first export
