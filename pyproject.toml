@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "justcaptions-agent"
-version = "1.3.1"
+version = "1.4.0"
 description = "Open-source MCP and CLI for styled video captions, local rendering and the Just Captions API"
 readme = "README.md"
 requires-python = ">=3.10"

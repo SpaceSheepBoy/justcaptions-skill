@@ -59,6 +59,8 @@ then rerun with `--captions NAME.json --burn` (JSON keeps word timing for karaok
 
 This repository also exposes a local MCP (`justcaptions-mcp`) and packaged CLI (`justcaptions`). Setup: https://justcaptions.com/agents/ . Run `check_environment`, `list_styles`, optionally `preview_style`, then `caption_video` and poll `get_job`. The remote MCP at https://api.justcaptions.com/mcp only handles audio and caption text; render with the local tool.
 
+Choose named fonts with MCP `list_fonts` or CLI `--list-fonts`; pass `{"font_id":"anton"}` in overrides/style config. Fonts are bundled locally; named fonts override `font_family`, and `font_id:null` clears that override. Named fonts target Latin captions; other scripts use existing system fallback.
+
 Use `--safe-area tiktok|reels|shorts|none` and `--style-config FILE.json` for validated overrides. `--json` provides structured CLI results. Existing outputs are protected unless the user explicitly requests `--overwrite`. For batch input, avoid duplicate output basenames by using distinct folders. Corrected/translated words have estimated timing. Portable rendering can differ from native iOS fonts/animations. Never describe estimated word timing as aligned to the audio.
 
 

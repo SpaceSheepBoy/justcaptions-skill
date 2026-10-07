@@ -37,11 +37,17 @@ class Style:
     animation: str = "none"
     highlight_box: bool = False
     font_family: str = "sans"
+    font_id: Optional[str] = None
     glow: bool = False
 
 
 def catalog() -> dict:
     return json.loads((ASSETS / "styles.json").read_text(encoding="utf-8"))
+
+
+def font_catalog() -> dict:
+    data = catalog()
+    return {"catalog_version": data["catalog_version"], "rendering": "local", "fonts": data["fonts"]}
 
 
 def color(value):
@@ -89,6 +95,9 @@ def resolve(style_id: str, overrides=None) -> Style:
             changes[k] = color(changes[k])
     if "font_family" in changes and changes["font_family"] not in ("sans", "regular", "serif"):
         raise ValueError("font_family must be sans, regular or serif.")
+    if "font_id" in changes and changes["font_id"] is not None:
+        if not isinstance(changes["font_id"], str) or changes["font_id"] not in {f["id"] for f in catalog()["fonts"]}:
+            raise ValueError("Unknown font_id. Call list_fonts for supported named fonts.")
     if "uppercase" in changes and type(changes["uppercase"]) is not bool:
         raise ValueError("uppercase must be boolean.")
     if "max_words" in changes and changes["max_words"] is not None and (type(changes["max_words"]) is not int or not 1 <= changes["max_words"] <= 20):

@@ -43,6 +43,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--crf", type=int, default=20)
     p.add_argument("--keep-frames", action="store_true", help="keep the rendered PNGs (for debugging)")
     p.add_argument("--list-styles", action="store_true")
+    p.add_argument("--list-fonts", action="store_true", help="list bundled named fonts and their IDs")
     p.add_argument("--json", action="store_true", help="structured results on stdout")
     p.add_argument("--style-config", help="JSON file with validated style overrides")
     p.add_argument("--safe-area", choices=["none", "tiktok", "reels", "shorts"], default="none")
@@ -257,6 +258,13 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
+    if args.list_fonts:
+        if args.json:
+            print(json.dumps(styles.font_catalog()))
+        else:
+            for font in styles.font_catalog()["fonts"]:
+                print(f"{font['id']:18} {font['title']} ({font['category']})")
+        return 0
     if args.list_styles:
         if args.json:
             print(json.dumps(styles.catalog()))
