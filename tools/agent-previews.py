@@ -27,7 +27,7 @@ for row in styles.catalog()['styles']:
     frames = []
     for tick in range(fps * duration):
         time = tick / fps
-        frame = Image.new('RGBA', (width, height), (43, 48, 60, 255))
+        frame = Image.new('RGBA', (width, height), (12, 12, 14, 255))
         for caption, states in spans:
             if caption.start <= time < caption.end:
                 active = next(state for start, end, state in states if start <= time < end)
