@@ -39,7 +39,7 @@ python3 scripts/jc.py --signup you@example.com              # free API key (ask 
 python3 scripts/jc.py --account                             # usage this month, estimated charge
 ```
 
-Options: all 15 IDs from `--list-styles --json` (old names remain valid), `--position top|middle|bottom|0-1`,
+Options: all 16 IDs from `--list-styles --json` (old names remain valid), `--position top|middle|bottom|0-1`,
 `--size small|medium|large`, `--length short|medium|long` (words on screen), `--language en`,
 `--out-dir DIR`, `--engine api|local`. Outputs go next to the input: `NAME.srt`, `NAME.json`,
 `NAME.captioned.mp4`. Output file paths are printed on stdout, progress on stderr.
