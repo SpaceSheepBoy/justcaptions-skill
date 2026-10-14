@@ -4,15 +4,34 @@ import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills/justcaptions/scripts'))
 from justcaptions import cli, styles
-from justcaptions.grouping import Caption, Word
+from justcaptions.grouping import Caption, Word, group_words
 from justcaptions.render import Renderer
 
 class AgentTests(unittest.TestCase):
     def test_catalog_and_legacy_aliases(self):
-        self.assertEqual(len(styles.catalog()['styles']), 15)
+        self.assertEqual(len(styles.catalog()['styles']), 16)
         self.assertEqual(styles.resolve('wordHighlight'), styles.resolve('word-highlight'))
         self.assertEqual(styles.resolve('karaoke').highlight_color, (255, 227, 77))
         self.assertEqual(styles.resolve('white-outline').text_color, (255, 255, 255))
+
+    def test_word_card_uses_brand_font_and_single_word_timing(self):
+        style = styles.resolve('wordCard')
+        self.assertEqual(style, styles.resolve('word-card'))
+        self.assertEqual(style.font_id, 'poppins')
+        self.assertEqual(style.background, (255, 227, 77))
+        self.assertEqual(style.text_color, (0, 0, 0))
+        self.assertEqual((style.outline_scale, style.shadow_strength), (0, 0))
+        self.assertFalse(style.uppercase)
+        ws = [Word('Make', 0, .4), Word('great', .5, .8), Word('videos', 2, 2.5)]
+        captions = group_words(ws, max_words=style.max_words)
+        self.assertEqual([c.text for c in captions], ['Make', 'great', 'videos'])
+        self.assertEqual([(c.start, c.end) for c in captions], [(0, .5), (.5, .8), (2, 2.5)])
+        self.assertEqual([c.words for c in captions], [[w] for w in ws])
+        renderer = Renderer(540, 960, style)
+        self.assertEqual(renderer.states(captions[0]), [(0, .5, None)])
+        image = renderer.frame(captions[0])
+        self.assertIsNotNone(image.getbbox())
+        self.assertIn((255, 227, 77, 255), set(image.getdata()))
 
     def test_overrides_validate_instead_of_silently_ignoring(self):
         self.assertEqual(styles.resolve('mega', {'highlight_color':'#123456'}).highlight_color, (18,52,86))
@@ -50,9 +69,12 @@ class AgentTests(unittest.TestCase):
         for row in styles.catalog()['styles']:
             renderer=Renderer(540,960,styles.resolve(row['id']),'large',.92,'tiktok')
             states=renderer.states(caption)
-            self.assertNotEqual(row['animation'],'none',row['id'])
-            self.assertGreater(len(states),1,row['id'])
-            self.assertGreater(len({renderer.frame(caption,state).tobytes() for _,_,state in states}),1,row['id'])
+            if row['animation'] == 'none':
+                self.assertEqual(row['id'], 'word-card')
+                self.assertEqual(states, [(caption.start, caption.end, None)])
+            else:
+                self.assertGreater(len(states),1,row['id'])
+                self.assertGreater(len({renderer.frame(caption,state).tobytes() for _,_,state in states}),1,row['id'])
             img=renderer.frame(caption,states[-1][2]);box=img.getbbox()
             self.assertIsNotNone(box,row['id'])
             self.assertGreaterEqual(box[1],96,row['id']);self.assertLessEqual(box[3],749,row['id'])

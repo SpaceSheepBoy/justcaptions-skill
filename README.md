@@ -2,7 +2,7 @@
 
 Caption videos from Codex, Claude Code, any MCP client, or your terminal. This skill transcribes the speech, makes SRT/VTT/JSON files, and burns TikTok/Reels-style captions into the video. It does one video or a whole folder at a time.
 
-15 animated portable presets follow the [Just Captions](https://apps.apple.com/app/id6770354079) app style families. Typography and sampled animations can differ from native iOS. Rendering runs on your machine with Pillow and ffmpeg.
+16 portable presets follow the [Just Captions](https://apps.apple.com/app/id6770354079) app style families. Typography and sampled animations can differ from native iOS. Rendering runs on your machine with Pillow and ffmpeg.
 
 [Choose a style and copy a task](https://justcaptions.com/agents/) · [API docs](https://justcaptions.com/api/) · [OpenAPI](https://justcaptions.com/openapi.json) · [Style catalog](https://justcaptions.com/styles.json)
 
@@ -69,7 +69,7 @@ Ask: **“Caption `~/Movies/intro.mp4` with Word Highlight for TikTok. Save MP4,
 | Tool | Purpose |
 | --- | --- |
 | `check_environment` | Media tools and recognition/key availability; never reveals credentials |
-| `list_styles` | 15 presets, accepted overrides, aliases and safe-area margins |
+| `list_styles` | 16 presets, accepted overrides, aliases and safe-area margins |
 | `preview_style` | An inline PNG rendered from the selected settings, without a paid API call |
 | `caption_video` | Start a video/folder job; returns a job ID immediately |
 | `get_job` | Poll stages and per-file verified output paths |
@@ -99,9 +99,9 @@ Tools: `list_styles`, `get_pricing`, `get_usage`, `transcribe_audio`, `correct_c
 
 ## Styles and customization
 
-All 15 presets animate in video exports and the website previews, using spoken-word highlights/reveals, pop entrances, fades, typewriting or a pulsing glow.
+The original 15 presets animate using spoken-word highlights/reveals, pop entrances, fades, typewriting or a pulsing glow. Word Card displays one original-case word at a time in bundled Poppins Bold on our yellow brand card, without an entrance or opacity animation. It uses the existing word grouping and short-gap hold behavior.
 
-The authoritative versioned catalog is [`skills/justcaptions/assets/styles.json`](skills/justcaptions/assets/styles.json): Emoji, Mega, Reveal, Neon, White box, Yellow box, Gray box, Yellow outline, Word Highlight, Highlight Box, Impact, Pop In, Typewriter, Cinema and Editorial. Historical `karaoke`, `black-box` and `white-outline` CLI names remain supported. App IDs such as `wordHighlight` resolve to their portable preset IDs.
+The authoritative versioned catalog is [`skills/justcaptions/assets/styles.json`](skills/justcaptions/assets/styles.json): Emoji, Mega, Reveal, Neon, Word Card, White box, Yellow box, Gray box, Yellow outline, Word Highlight, Highlight Box, Impact, Pop In, Typewriter, Cinema and Editorial. Historical `karaoke`, `black-box` and `white-outline` CLI names remain supported. App IDs such as `wordHighlight` resolve to their portable preset IDs.
 
 The local MCP accepts `overrides`, for example:
 
@@ -156,7 +156,7 @@ python3 $S/jc.py --help
 
 | option | values |
 | --- | --- |
-| `--style` | All 15 preset IDs plus legacy names; `--list-styles --json` returns the catalog |
+| `--style` | All 16 preset IDs plus legacy names; `--list-styles --json` returns the catalog |
 | `--position` | `top`, `middle`, `bottom`, or a fraction like `0.7` |
 | `--size` | `small`, `medium`, `large` |
 | `--length` | `short`, `medium`, `long`: how many words go on screen |

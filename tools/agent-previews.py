@@ -9,6 +9,7 @@ from justcaptions.render import Renderer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--site', type=Path, required=True)
+parser.add_argument('--style', help='Render only this catalog style ID')
 args = parser.parse_args()
 folder = args.site / 'assets/agent-styles'
 folder.mkdir(parents=True, exist_ok=True)
@@ -18,6 +19,8 @@ words = [Word(text, start, end) for text, start, end in [
     ('Make', 0, .8), ('great', .8, 1.7), ('videos.', 1.7, 2.7),
     ('Tell', 3, 3.8), ('your', 3.8, 4.7), ('story.', 4.7, 5.7)]]
 for row in styles.catalog()['styles']:
+    if args.style and row['id'] != args.style:
+        continue
     style = styles.resolve(row['id'])
     captions = group_words(words, max_words=style.max_words)
     for caption in captions:
