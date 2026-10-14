@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import api, emoji, formats, media, styles, execution
-from .grouping import Caption, Word, group_words, split_into_words, words_from_segments
+from .grouping import Caption, Word, group_words, reconcile_caption_text, split_into_words, words_from_segments
 from .transcribe import transcribe
 
 
@@ -179,7 +179,7 @@ def caption_video(video: Path, args: argparse.Namespace, out_dir: Path) -> List[
             need_key("--correct")
             def correction():
                 fixed = api.correct([c.text for c in captions], language, glossary)
-                return [split_into_words(Caption(c.start, c.end, t)) if t != c.text else c for c, t in zip(captions, fixed)], language
+                return [reconcile_caption_text(c, t) for c, t in zip(captions, fixed)], language
             captions, language = cached('corrected', correction)
         if args.translate:
             progress("translating")
