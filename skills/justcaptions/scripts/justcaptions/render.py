@@ -278,14 +278,37 @@ class Renderer:
             spans = [(caption.start + entrance * k / 8, caption.start + entrance * (k + 1) / 8, k) for k in range(8)]
             return spans + [(caption.start + entrance, caption.end, 8)]
         if animation == "typewriter":
-            count = len(" ".join(_tokens(caption, self.style)))
-            ticks = max(1, min(count, 120))
-            entrance = (caption.end - caption.start) * .65
-            spans = [(caption.start + entrance * k / ticks, caption.start + entrance * (k + 1) / ticks, max(1, round(count * (k + 1) / ticks))) for k in range(ticks)]
-            return spans + [(caption.start + entrance, caption.end, count)]
+            tokens = _tokens(caption, self.style)
+            text = ("" if is_compact_script(caption.text) else " ").join(tokens)
+            # Python counts code points; Swift counts extended grapheme clusters.
+            # Timing parity here is exact for ordinary/CJK characters, while complex
+            # emoji and combining sequences still need a shared grapheme contract.
+            count = len(text)
+            duration = max(caption.end - caption.start, 0)
+            if sum(not c.isspace() for c in text) <= 1 or duration < .18:
+                return [(caption.start, caption.end, count)]
+            entrance = duration * .86
+            spans = []
+            for visible in range(1, count + 1):
+                start = caption.start if visible == 1 else math.nextafter(
+                    caption.start + entrance * (visible - 1) / count, math.inf)
+                end = caption.end if visible == count else math.nextafter(
+                    caption.start + entrance * visible / count, math.inf)
+                if end > start:
+                    spans.append((start, end, visible))
+            return spans
         if (not self.style.highlight_color and animation != "word-reveal") or n == 0:
             return [(caption.start, caption.end, None)]
         words = [w for w in caption.words if w.text.strip()]
+        if animation == "word-highlight":
+            # Keep the full caption visible during silence, but yellow only while
+            # its word is actually spoken, matching native [start, end) timing.
+            boundaries = sorted({caption.start, caption.end, *(
+                min(caption.end, max(caption.start, value))
+                for w in words for value in (w.start, w.end))})
+            return [(start, end, next((k for k, w in enumerate(words)
+                    if w.start <= start < w.end), None))
+                    for start, end in zip(boundaries, boundaries[1:]) if end > start]
         spans = []
         for k, w in enumerate(words):
             start = caption.start if k == 0 else w.start
