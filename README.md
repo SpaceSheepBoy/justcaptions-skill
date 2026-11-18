@@ -4,7 +4,7 @@ Caption videos from Codex, Claude Code, any MCP client, or your terminal. This s
 
 15 animated portable presets follow the [Just Captions](https://apps.apple.com/app/id6770354079) app style families. Typography and sampled animations can differ from native iOS. Rendering runs on your machine with Pillow and ffmpeg.
 
-[Choose a style and copy a task](https://justcaptions.com/agents/) · [API docs](https://justcaptions.com/api/) · [OpenAPI](https://justcaptions.com/openapi.json) · [Style catalog](https://justcaptions.com/styles.json)
+[Choose a style and copy a task](https://justcaptions.com/agents/) · [API docs](https://justcaptions.com/api/) · [OpenAPI](https://api.justcaptions.com/openapi.json) · [Style catalog](https://justcaptions.com/styles.json)
 
 | Emoji | Mega | Reveal |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Python 3.10+, [uv](https://docs.astral.sh/uv/getting-started/installation/) and 
 ```toml
 [mcp_servers.justcaptions]
 command = "uvx"
-args = ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl", "justcaptions-mcp"]
+args = ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.5.1/justcaptions_agent-1.5.1-py3-none-any.whl", "justcaptions-mcp"]
 startup_timeout_sec = 120
 
 [mcp_servers.justcaptions_cloud]
@@ -51,7 +51,7 @@ bearer_token_env_var = "JUSTCAPTIONS_API_KEY"
     "justcaptions": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl", "justcaptions-mcp"]
+      "args": ["--from", "https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.5.1/justcaptions_agent-1.5.1-py3-none-any.whl", "justcaptions-mcp"]
     },
     "justcaptions_cloud": {
       "type": "http",
@@ -62,7 +62,7 @@ bearer_token_env_var = "JUSTCAPTIONS_API_KEY"
 }
 ```
 
-Set `JUSTCAPTIONS_API_KEY`, or save a key with the CLI's `--signup YOUR_EMAIL`. The local MCP also reads `~/.config/justcaptions/api_key`. Never put keys in prompts or commits. For recognition without a key, add `"--with", "faster-whisper"` before `"--from"` in the `uvx` arguments. The offline model downloads on first use.
+Verify your email and create a key in the [API account console](https://justcaptions.com/api/account/), then set `JUSTCAPTIONS_API_KEY`. The local MCP also reads existing keys from `~/.config/justcaptions/api_key`. For recognition without a key, add `"--with", "faster-whisper"` before `"--from"` in the `uvx` arguments. The offline model downloads on first use.
 
 Ask: **“Caption `~/Movies/intro.mp4` with Word Highlight for TikTok. Save MP4, SRT, VTT and JSON in `./captioned/`, and preserve the original.”**
 
@@ -116,6 +116,19 @@ The CLI takes the same object in `--style-config FILE.json`. Unknown keys and in
 Recognition word timestamps are retained when text is unchanged. Corrected/translated text and imported subtitle-only files use **estimated word timing**, not forced alignment. Serif/regular families use available system fonts, with a bundled Geist fallback.
 
 ## Install
+
+### Free local video editing
+
+The [Local Video Edit skill](skills/local-video-edit/SKILL.md) turns a list of
+source timestamps into one MP4. Use it for jump cuts, removing a false start,
+or assembling a highlight reel from your own footage. It runs locally with
+Python and FFmpeg, with no account, media generation or model download.
+
+Copy `skills/local-video-edit/` into your agent's skills folder, or run
+`python3 skills/local-video-edit/scripts/edit.py input.mp4 cuts.json edited.mp4`
+from a clone. See the skill for the cut-list format and preview command.
+
+### Captioning
 
 You need `ffmpeg` and Python 3.9+ with Pillow:
 
@@ -176,13 +189,7 @@ Without a key, everything runs offline with faster-whisper. With a key you get:
 - `--correct` and `--translate`
 - AI emoji picks for the Emoji style (the offline fallback is a keyword table)
 
-Getting a key is instant and needs no card:
-
-```bash
-python3 skills/justcaptions/scripts/jc.py --signup you@example.com
-```
-
-The key is saved to `~/.config/justcaptions/api_key` (readable only by you). If `JUSTCAPTIONS_API_KEY` is set, it is used instead.
+Create the key in the [API account console](https://justcaptions.com/api/account/) after verifying your email. The free allowance requires no card. Set the key in your shell as `JUSTCAPTIONS_API_KEY`. Keep it out of prompts and commits.
 
 ```bash
 python3 skills/justcaptions/scripts/jc.py --account   # usage this month and estimated charge
@@ -196,7 +203,7 @@ python3 skills/justcaptions/scripts/jc.py --account   # usage this month and est
 | Correct, translate, emoji | $0.01 per 1,000 caption characters sent | 50,000 characters |
 
 - **Free plan** (no card): stops when the free allowance runs out. When faster-whisper is installed, transcription carries on locally.
-- **Pay as you go**: add a card at https://justcaptions.com/api/account/ to keep going past the free allowance. Stripe invoices you monthly, and the default spend cap is $100 a month.
+- **Prepaid credits** let you keep going past the free allowance. Choose a one-time $5, $10 or $20 top-up in the [API account console](https://justcaptions.com/api/account/). There is no automatic recharge.
 - Failed requests are not billed.
 
 The API takes audio only. The script pulls a small mono track out of your video, so the video itself is never uploaded, and burning always happens on your machine. API reference: https://justcaptions.com/api/
@@ -241,7 +248,7 @@ Setup/export statistics are optional. `JUSTCAPTIONS_METRICS_ID` enables the coun
 Install a standard wheel from the latest GitHub release:
 
 ```sh
-pip install https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.3.1/justcaptions_agent-1.3.1-py3-none-any.whl
+pip install https://github.com/SpaceSheepBoy/justcaptions-skill/releases/download/v1.5.1/justcaptions_agent-1.5.1-py3-none-any.whl
 ```
 
 GitHub Actions builds and checks wheel/sdist artifacts, attaches them to releases and publishes `server.json` to the official MCP Registry using GitHub OIDC. PyPI publishing uses a trusted publisher when the owner enables it; the website uses the release wheel until that registration is completed.
