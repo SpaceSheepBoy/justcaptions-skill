@@ -14,7 +14,7 @@ Requires Python 3.9+ and a recent FFmpeg build with `libx264`, `ffmpeg` and `ffp
    [{"start": 2.5, "end": 7}, {"start": 11.2, "end": 16}]
    ```
 
-3. Run the script from this skill directory, passing the source, JSON file and a new MP4 path. Choose a filesystem that supports hard links (for example, APFS or ext4) so the script can publish a finished file atomically. Add `--dry-run` to check the cut list and preview the planned order and total duration. The full render checks that every range contains a frame. If it reports an empty range, adjust that range and retry.
+3. Run the script from this skill directory, passing the source, JSON file and a new MP4 path. Choose a filesystem that supports hard links (for example, APFS or ext4) so the script can publish a finished file atomically. Add `--dry-run` to check the cut list and preview the planned order and total duration. The full render checks that every range contains a frame. If it reports an empty range or FFmpeg reports an empty video, adjust the selection and retry.
 
    ```sh
    python3 scripts/edit.py input.mp4 cuts.json edited.mp4
