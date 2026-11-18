@@ -87,7 +87,7 @@
     "/styles": {
       "get": {
         "operationId": "get_styles",
-        "summary": "15 local rendering presets, versioned overrides, aliases and platform safe areas",
+        "summary": "16 local rendering presets, versioned overrides, aliases and platform safe areas",
         "responses": {
           "200": {
             "description": "Success",

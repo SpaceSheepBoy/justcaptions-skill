@@ -35,7 +35,7 @@ export async function handleMcpRequest(request, { handleAPI, catalog }) {
     const data = await reply.json();
     return { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data, ...(reply.ok ? {} : { isError: true }) };
   };
-  server.registerTool('list_styles', { description: 'List 15 local rendering presets, aliases, style overrides and platform safe areas. This remote server returns the catalog; render via the local MCP.', annotations: read }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog) }], structuredContent: catalog }));
+  server.registerTool('list_styles', { description: 'List 16 local rendering presets, aliases, style overrides and platform safe areas. This remote server returns the catalog; render via the local MCP.', annotations: read }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog) }], structuredContent: catalog }));
   server.registerTool('list_fonts', { description: 'List named font IDs, licenses and script coverage. Pass font_id in local rendering overrides; no cloud video rendering.', annotations: read }, async () => {
     const data = { catalog_version: catalog.catalog_version, rendering: 'local', fonts: catalog.fonts };
     return { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data };

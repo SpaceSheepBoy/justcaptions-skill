@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_version": "1.4.0",
+  "catalog_version": "1.5.0",
   "rendering": "local",
   "parity_note": "App-inspired portable presets. Pillow/ffmpeg typography and animation sampling can differ from native iOS rendering.",
   "styles": [
@@ -91,6 +91,29 @@
       "highlight_box": false,
       "font_family": "sans",
       "glow": true
+    },
+    {
+      "id": "word-card",
+      "title": "Word Card",
+      "app_style_id": "wordCard",
+      "description": "One original-case word in Poppins Bold on a yellow card. No opacity animation.",
+      "version": 1,
+      "text_color": "#000000",
+      "background": "#FFE34D",
+      "background_opacity": 1,
+      "outline_color": "#000000",
+      "outline_scale": 0,
+      "shadow_strength": 0,
+      "highlight_color": null,
+      "max_words": 1,
+      "font_multiplier": 1,
+      "emoji": false,
+      "uppercase": false,
+      "animation": "none",
+      "highlight_box": false,
+      "font_family": "sans",
+      "font_id": "poppins",
+      "glow": false
     },
     {
       "id": "white-box",

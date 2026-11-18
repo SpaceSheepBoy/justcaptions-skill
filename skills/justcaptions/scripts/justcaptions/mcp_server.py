@@ -34,7 +34,7 @@ def check_environment() -> dict[str, Any]:
 
 @mcp.tool(annotations=READ, structured_output=True)
 def list_styles() -> dict[str, Any]:
-    """Return 15 portable presets, supported overrides, aliases and conservative platform safe areas."""
+    """Return 16 portable presets, supported overrides, aliases and conservative platform safe areas."""
     return styles.catalog()
 
 

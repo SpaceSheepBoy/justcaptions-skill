@@ -39,7 +39,7 @@ def to_json(captions: List[Caption], language=None) -> str:
                     "end": round(c.end, 3),
                     "text": c.text,
                     "emoji": c.emoji,
-                    "words": [{"word": w.text, "start": round(w.start, 3), "end": round(w.end, 3)} for w in c.words],
+                    "words": [{"word": w.text, "start": round(w.start, 3), "end": round(w.end, 3), **({"id": w.id} if w.id is not None else {})} for w in c.words],
                 }
                 for c in captions
             ],
@@ -80,6 +80,6 @@ def load_captions_json(data: dict) -> List[Caption]:
     """Reads this tool's own JSON output back in."""
     out = []
     for c in data.get("captions", []):
-        words = [Word(w["word"], float(w["start"]), float(w["end"])) for w in c.get("words", [])]
+        words = [Word(w["word"], float(w["start"]), float(w["end"]), w.get("id")) for w in c.get("words", [])]
         out.append(Caption(float(c["start"]), float(c["end"]), c["text"], words, c.get("emoji")))
     return out
