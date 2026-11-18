@@ -58,6 +58,23 @@ def read_cuts(path, duration):
     return cuts
 
 
+def verify_cut_frames(partial, cut_starts):
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "packet=pts", "-of", "csv=p=0", str(partial),
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    # All video timestamps are in microseconds. Each nonempty cut starts at its exact offset.
+    missing = {str(start): index for index, start in enumerate(cut_starts, start=1)}
+    for line in result.stdout.splitlines():
+        missing.pop(line.partition(",")[0], None)
+    if missing:
+        index = next(iter(missing.values()))
+        raise ValueError(f"Range {index} contains no video frame. Adjust its start or end time.")
+
+
 def render(source, output, cuts, video, audio):
     filters = []
     video_inputs = []
@@ -68,11 +85,13 @@ def render(source, output, cuts, video, audio):
         filters.append(f"[0:{audio}]aresample=async=1:first_pts=0,apad,asplit={len(cuts)}{labels}")
 
     offset = Decimal(0)
+    cut_starts = []
     for index, cut in enumerate(cuts):
         start, end = (format(cut[key], ".6f") for key in ("start", "end"))
+        cut_starts.append(int(offset * 1_000_000))
         filters.append(
-            f"[0:{video}]trim=start={start}:end={end},settb=AVTB,"
-            f"setpts=PTS-STARTPTS+{offset:.6f}/TB[v{index}]"
+            f"[0:{video}]settb=AVTB,trim=start={start}:end={end},"
+            f"setpts=PTS-STARTPTS+{cut_starts[-1]}[v{index}]"
         )
         video_inputs.append(f"[v{index}]")
         offset += cut["end"] - cut["start"]
@@ -90,6 +109,7 @@ def render(source, output, cuts, video, audio):
         "-i", str(source), "-filter_complex", ";".join(filters),
         "-map", "[video]", "-map_chapters", "-1", "-c:v", "libx264", "-crf", "18", "-bf", "0",
         "-pix_fmt", "yuv420p", "-fps_mode", "vfr", "-enc_time_base:v", "1:1000000",
+        "-video_track_timescale", "1000000",
     ]
     # Interleave sets frame timestamps but can leave the last packet duration unset.
     packet_duration = f"if(eq(NEXT_PTS,NOPTS),{offset:.6f}/TB-PTS,NEXT_PTS-PTS)"
@@ -101,7 +121,7 @@ def render(source, output, cuts, video, audio):
     with TemporaryDirectory(prefix=".local-video-edit-", dir=output.parent) as stage:
         partial = Path(stage) / "edited.mp4"
         subprocess.run([*command, str(partial)], check=True)
-        probe(partial)
+        verify_cut_frames(partial, cut_starts)
         os.link(partial, output)
 
 
@@ -110,7 +130,7 @@ def main():
     parser.add_argument("source", type=Path, help="Source video")
     parser.add_argument("cuts", type=Path, help="JSON array of source ranges to keep")
     parser.add_argument("output", type=Path, help="New MP4 output")
-    parser.add_argument("--dry-run", action="store_true", help="Validate and print the edit without rendering")
+    parser.add_argument("--dry-run", action="store_true", help="Check the cut list and print the plan without rendering")
     args = parser.parse_args()
 
     source, output = args.source.absolute(), args.output.absolute()

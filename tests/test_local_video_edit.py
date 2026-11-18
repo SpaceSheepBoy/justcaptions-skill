@@ -109,3 +109,27 @@ class LocalVideoEditTests(unittest.TestCase):
         self.assertEqual(int(media["streams"][0]["nb_frames"]), 3)
         self.assertAlmostEqual(float(media["format"]["duration"]), 0.6, delta=0.001)
         self.assertEqual(media["chapters"], [])
+
+    def test_rejects_a_range_without_a_video_frame(self):
+        self.make_source(audio=True)
+        original = self.source.read_bytes()
+        visible = {"start": 1, "end": 1.2}
+        empty = {"start": 0.001, "end": 0.01}
+        for cuts in ([empty], [empty, visible], [visible, empty]):
+            with self.subTest(cuts=cuts):
+                self.cuts.write_text(json.dumps(cuts))
+                edit = self.edit()
+                self.assertNotEqual(edit.returncode, 0)
+                self.assertIn(f"Range {cuts.index(empty) + 1} contains no video frame", edit.stderr)
+                self.assertFalse(self.output.exists())
+                self.assertEqual(self.source.read_bytes(), original)
+
+    def test_non_frame_aligned_ranges_on_a_fractional_timeline(self):
+        self.make_source(audio=False)
+        cuts = [{"start": 1.017, "end": 1.085123}, {"start": 0.003, "end": 0.058}]
+        self.cuts.write_text(json.dumps(cuts))
+        edit = self.edit()
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        media = self.inspect()
+        self.assertEqual(int(media["streams"][0]["nb_frames"]), 3)
+        self.assertAlmostEqual(float(media["format"]["duration"]), 0.123123, delta=0.001)
