@@ -8,6 +8,7 @@ import unittest
 
 
 EDITOR = Path(__file__).resolve().parents[1] / "skills/local-video-edit/scripts/edit.py"
+SRT_RETIMER = EDITOR.with_name("retime_srt.py")
 
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires FFmpeg")
@@ -36,6 +37,12 @@ class LocalVideoEditTests(unittest.TestCase):
     def edit(self, *options):
         return subprocess.run(
             [sys.executable, str(EDITOR), str(self.source), str(self.cuts), str(self.output), *options],
+            capture_output=True, text=True,
+        )
+
+    def retime(self, source_srt, output_srt):
+        return subprocess.run(
+            [sys.executable, str(SRT_RETIMER), str(self.source), str(self.cuts), str(source_srt), str(output_srt)],
             capture_output=True, text=True,
         )
 
@@ -135,3 +142,62 @@ class LocalVideoEditTests(unittest.TestCase):
         media = self.inspect()
         self.assertEqual(int(media["streams"][0]["nb_frames"]), 3)
         self.assertAlmostEqual(float(media["format"]["duration"]), 0.123123, delta=0.001)
+
+
+    def test_retimes_existing_captions_across_reordered_and_repeated_cuts(self):
+        self.make_source(audio=True)
+        self.cuts.write_text('[{"start":1.2,"end":1.8},{"start":0.2,"end":0.8},{"start":1.2,"end":1.8}]')
+        source_srt = self.source.with_suffix(".srt")
+        output_srt = self.output.with_suffix(".srt")
+        original = (
+            "10\r\n00:00:00,000 --> 00:00:00,400\r\nRouge\r\n\r\n"
+            "11\r\n00:00:00,850 --> 00:00:01,050\r\nRemoved\r\n\r\n"
+            "12\r\n00:00:01,100 --> 00:00:01,500\r\nBleu\r\n字幕\r\n\r\n"
+            "13\r\n00:00:01,700 --> 00:00:01,900\r\nFin\r\n"
+        ).encode("utf-8-sig")
+        source_srt.write_bytes(original)
+
+        edit = self.edit()
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        result = self.retime(source_srt, output_srt)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output_srt.read_text(encoding="utf-8"),
+            "1\n00:00:00,000 --> 00:00:00,300\nBleu\n字幕\n\n"
+            "2\n00:00:00,500 --> 00:00:00,600\nFin\n\n"
+            "3\n00:00:00,600 --> 00:00:00,800\nRouge\n\n"
+            "4\n00:00:01,200 --> 00:00:01,500\nBleu\n字幕\n\n"
+            "5\n00:00:01,700 --> 00:00:01,800\nFin\n",
+        )
+        self.assertGreater(self.frame_color(0.1)[2], 200)
+        self.assertGreater(self.frame_color(0.7)[0], 200)
+        self.assertGreater(self.frame_color(1.3)[2], 200)
+        self.assertEqual(source_srt.read_bytes(), original)
+
+        exported = output_srt.read_bytes()
+        self.assertNotEqual(self.retime(source_srt, output_srt).returncode, 0)
+        self.assertEqual(output_srt.read_bytes(), exported)
+        self.assertNotEqual(self.retime(source_srt, source_srt).returncode, 0)
+        self.assertEqual(source_srt.read_bytes(), original)
+
+    def test_rejects_invalid_srt_and_drops_cues_with_zero_rounded_duration(self):
+        self.make_source(audio=False)
+        self.cuts.write_text('[{"start":0,"end":0.0005},{"start":1,"end":1.0395}]')
+        source_srt = self.source.with_suffix(".srt")
+        output_srt = self.output.with_suffix(".srt")
+        source_srt.write_text("1\n00:00:00,001 --> 00:00:00,000\nReversed\n")
+        bad = self.retime(source_srt, output_srt)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("SRT cue 1", bad.stderr)
+        self.assertFalse(output_srt.exists())
+
+        source_srt.write_text(
+            "1\n00:00:00,000 --> 00:00:00,001\nToo short\n\n"
+            "2\n00:00:01,000 --> 00:00:01,041\nSingle frame\n"
+        )
+        edit = self.edit()
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        self.assertEqual(int(self.inspect()["streams"][0]["nb_frames"]), 2)
+        result = self.retime(source_srt, output_srt)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output_srt.read_text(), "1\n00:00:00,000 --> 00:00:00,040\nSingle frame\n")

@@ -22,4 +22,12 @@ Requires Python 3.9+ and a recent FFmpeg build with `libx264`, `ffmpeg` and `ffp
 
 4. Check the output duration against the plan to within frame/encoder rounding. Preview each cut and verify picture, sound and transitions. Both the source and existing outputs are protected. The new MP4 contains the primary video encoded as H.264 and the first audio track encoded as AAC if present.
 
-Caption the edited video with the separate Just Captions skill or retime existing subtitles to the new edit. Original subtitle timestamps refer to the uncut source.
+## Keep existing SRT captions
+
+After exporting the video, pass the original video, the same cut list and a UTF-8 SRT timed to the original video. Use a new SRT path next to the edited MP4.
+
+```sh
+python3 scripts/retime_srt.py input.mp4 cuts.json source.srt edited.srt
+```
+
+Cues are clipped at cut boundaries and shifted to the edited timeline. Repeated cuts repeat their captions. Cue text, including multiple lines, is preserved. Timestamps are rounded down to whole milliseconds, and any result with zero duration at that precision is dropped. If no cues remain, the script writes an empty SRT. Use a different output path if an SRT already exists. If there is no source subtitle file, caption the edited MP4 with the separate Just Captions skill.
