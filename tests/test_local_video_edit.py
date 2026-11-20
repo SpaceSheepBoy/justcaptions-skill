@@ -9,6 +9,7 @@ import unittest
 
 EDITOR = Path(__file__).resolve().parents[1] / "skills/local-video-edit/scripts/edit.py"
 SRT_RETIMER = EDITOR.with_name("retime_srt.py")
+SILENCE_DETECTOR = EDITOR.with_name("detect_silence.py")
 
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "requires FFmpeg")
@@ -201,3 +202,50 @@ class LocalVideoEditTests(unittest.TestCase):
         result = self.retime(source_srt, output_srt)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_srt.read_text(), "1\n00:00:00,000 --> 00:00:00,040\nSingle frame\n")
+
+    def detect_silence(self, source, *options):
+        return subprocess.run(
+            [sys.executable, str(SILENCE_DETECTOR), str(source), *options],
+            capture_output=True, text=True,
+        )
+
+    def test_detects_silence_on_the_source_timeline(self):
+        self.source = self.source.with_suffix(".mov")
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=64x48:r=25:d=2.4",
+            "-f", "lavfi", "-i",
+            "aevalsrc='0.25*sin(2*PI*440*t)*(between(t,0.4,0.7)+between(t,1.3,1.7))':s=48000:d=1.9",
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-c:a", "pcm_s16le", str(self.source),
+        ], check=True)
+        original = self.source.read_bytes()
+        result = self.detect_silence(self.source, "--min-duration", "0.3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ranges = json.loads(result.stdout)["silence"]
+        self.assertEqual(len(ranges), 3)
+        for cut, (start, end) in zip(ranges, [(0, 0.4), (0.7, 1.3), (1.7, 2.4)]):
+            self.assertAlmostEqual(cut["start"], start, delta=0.002)
+            self.assertAlmostEqual(cut["end"], end, delta=0.002)
+        self.assertEqual(self.source.read_bytes(), original)
+
+    def test_silence_scan_handles_short_media_and_invalid_inputs(self):
+        self.make_source(audio=True)
+        self.cuts.write_text('[{"start":0.2,"end":0.28}]')
+        result = self.edit()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.detect_silence(self.output, "--min-duration", "0.02")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"silence": []})
+
+        bad = self.detect_silence(self.output, "--noise-db", "inf")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("--noise-db must be", bad.stderr)
+        bad = self.detect_silence(self.output, "--min-duration", "0")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("--min-duration must be", bad.stderr)
+
+        self.source.unlink()
+        self.make_source(audio=False)
+        bad = self.detect_silence(self.source)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("needs an audio track", bad.stderr)
+        self.assertEqual(bad.stdout, "")

@@ -31,3 +31,23 @@ python3 scripts/retime_srt.py input.mp4 cuts.json source.srt edited.srt
 ```
 
 Cues are clipped at cut boundaries and shifted to the edited timeline. Repeated cuts repeat their captions. Cue text, including multiple lines, is preserved. Timestamps are rounded down to whole milliseconds, and any result with zero duration at that precision is dropped. If no cues remain, the script writes an empty SRT. Use a different output path if an SRT already exists. If there is no source subtitle file, caption the edited MP4 with the separate Just Captions skill.
+
+## Find quiet passages
+
+Copy the whole skill directory so the scripts can share source probing. Run
+the detector from that directory before making a cut list:
+
+```sh
+python3 scripts/detect_silence.py input.mp4 --noise-db -45 --min-duration 0.5
+```
+
+It reads the first audio track with FFmpeg and prints JSON such as
+`{"silence":[{"start":2.1,"end":3.2}]}`. Times are source seconds. The defaults
+are −45 dBFS and 0.5 seconds. Audio gaps and a quiet tail can be reported up
+to the end of the picture. With no qualifying ranges the array is empty.
+A video without an audio track returns an error.
+
+Review the candidates against playback, especially around quiet speech and
+intentional pauses. Put the ranges you want to **keep** into the cut list
+for `edit.py`, then reuse that list with `retime_srt.py` if you have source
+captions.
