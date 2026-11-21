@@ -126,8 +126,9 @@ Python and FFmpeg, with no account, media generation or model download.
 
 Copy `skills/local-video-edit/` into your agent's skills folder, or run
 `python3 skills/local-video-edit/scripts/edit.py input.mp4 cuts.json edited.mp4`
-from a clone. The same cut list can retime an existing SRT to match the exported
-video. The skill also reports quiet ranges to review when choosing cuts.
+from a clone. Add `--portrait` for a 1080×1920 vertical export that fits the
+whole picture. The same cut list can retime an existing SRT to match the
+exported video. The skill also reports quiet ranges to review when choosing cuts.
 See the skill for the commands and cut-list format.
 
 ### Captioning

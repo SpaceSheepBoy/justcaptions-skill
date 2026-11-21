@@ -75,7 +75,7 @@ def verify_cut_frames(partial, cut_starts):
         raise ValueError(f"Range {index} contains no video frame. Adjust its start or end time.")
 
 
-def render(source, output, cuts, video, audio):
+def render(source, output, cuts, video, audio, *, portrait=False):
     filters = []
     video_inputs = []
     audio_inputs = []
@@ -101,7 +101,15 @@ def render(source, output, cuts, video, audio):
 
     # Position each cut explicitly so a single-frame segment advances the timeline.
     filters.append(f"{''.join(video_inputs)}interleave=n={len(cuts)}[joined]")
-    filters.append("[joined]pad=ceil(iw/2)*2:ceil(ih/2)*2[video]")
+    if portrait:
+        # Fit the display aspect ratio to an even-sized square-pixel frame.
+        filters.append(
+            "[joined]scale=w='max(2,trunc(min(1080,1920*dar)/2)*2)':"
+            "h='max(2,trunc(min(1920,1080/dar)/2)*2)',setsar=1,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2[video]"
+        )
+    else:
+        filters.append("[joined]pad=ceil(iw/2)*2:ceil(ih/2)*2[video]")
     if audio is not None:
         filters.append(f"{''.join(audio_inputs)}concat=n={len(cuts)}:v=0:a=1[audio]")
     command = [
@@ -130,6 +138,7 @@ def main():
     parser.add_argument("source", type=Path, help="Source video")
     parser.add_argument("cuts", type=Path, help="JSON array of source ranges to keep")
     parser.add_argument("output", type=Path, help="New MP4 output")
+    parser.add_argument("--portrait", action="store_true", help="Fit the picture into a centered 1080x1920 frame")
     parser.add_argument("--dry-run", action="store_true", help="Check the cut list and print the plan without rendering")
     args = parser.parse_args()
 
@@ -145,8 +154,10 @@ def main():
             for count, cut in enumerate(cuts, start=1):
                 print(f"{count}. {cut['start']:.6f}–{cut['end']:.6f} s")
             print(f"Planned duration: {sum(cut['end'] - cut['start'] for cut in cuts):f} s")
+            if args.portrait:
+                print("Planned frame: 1080x1920 (portrait fit)")
         else:
-            render(source, output, cuts, video, audio)
+            render(source, output, cuts, video, audio, portrait=args.portrait)
             print(output)
     except subprocess.CalledProcessError as error:
         parser.exit(1, error.stderr or f"{error.cmd[0]} exited with status {error.returncode}.\n")

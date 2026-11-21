@@ -50,7 +50,7 @@ class LocalVideoEditTests(unittest.TestCase):
     def inspect(self):
         return json.loads(subprocess.check_output(
             ["ffprobe", "-v", "error",
-             "-show_entries", "format=duration:stream=codec_type,nb_frames:chapter=start_time",
+             "-show_entries", "format=duration:stream=codec_type,nb_frames,width,height,sample_aspect_ratio:chapter=start_time",
              "-of", "json", str(self.output)],
         ))
 
@@ -73,6 +73,7 @@ class LocalVideoEditTests(unittest.TestCase):
         self.assertEqual(edit.returncode, 0, edit.stderr)
         media = self.inspect()
         self.assertEqual([s["codec_type"] for s in media["streams"]], ["video", "audio"])
+        self.assertEqual((media["streams"][0]["width"], media["streams"][0]["height"]), (64, 48))
         self.assertAlmostEqual(float(media["format"]["duration"]), 1.8, delta=0.05)
         self.assertGreater(self.frame_color(0.2)[2], 200)
         self.assertGreater(self.frame_color(0.8)[0], 200)
@@ -82,6 +83,39 @@ class LocalVideoEditTests(unittest.TestCase):
         exported = self.output.read_bytes()
         self.assertNotEqual(self.edit().returncode, 0)
         self.assertEqual(self.output.read_bytes(), exported)
+
+    def test_portrait_fits_display_aspect_ratio_on_a_single_frame_cut(self):
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=red:s=64x48:r=25:d=1,setsar=2",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-c:v", "libx264", "-c:a", "aac", str(self.source),
+        ], check=True)
+        original = self.source.read_bytes()
+        self.cuts.write_text('[{"start":0.2,"end":0.24}]')
+        preview = self.edit("--portrait", "--dry-run")
+        self.assertEqual(preview.returncode, 0, preview.stderr)
+        self.assertIn("1080x1920", preview.stdout)
+        self.assertFalse(self.output.exists())
+
+        edit = self.edit("--portrait")
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        media = self.inspect()
+        video, audio = media["streams"]
+        self.assertEqual((video["width"], video["height"], video["sample_aspect_ratio"]), (1080, 1920, "1:1"))
+        self.assertEqual(int(video["nb_frames"]), 1)
+        self.assertEqual(audio["codec_type"], "audio")
+        self.assertAlmostEqual(float(media["format"]["duration"]), 0.04, delta=0.005)
+
+        # A 2:1 sample aspect ratio makes the fitted red picture about 405 pixels high.
+        frame = subprocess.check_output([
+            "ffmpeg", "-v", "error", "-i", str(self.output), "-frames:v", "1",
+            "-vf", "scale=90:160", "-pix_fmt", "rgb24", "-f", "rawvideo", "-",
+        ])
+        self.assertGreater(frame[(80 * 90) * 3], 200)
+        self.assertGreater(frame[(65 * 90 + 89) * 3], 200)
+        self.assertLess(frame[(58 * 90 + 45) * 3], 10)
+        self.assertLess(frame[(102 * 90 + 45) * 3], 10)
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_silent_video_and_invalid_ranges(self):
         self.make_source(audio=False)

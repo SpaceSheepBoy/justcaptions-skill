@@ -22,6 +22,16 @@ Requires Python 3.9+ and a recent FFmpeg build with `libx264`, `ffmpeg` and `ffp
 
 4. Check the output duration against the plan to within frame/encoder rounding. Preview each cut and verify picture, sound and transitions. Both the source and existing outputs are protected. The new MP4 contains the primary video encoded as H.264 and the first audio track encoded as AAC if present.
 
+## Export a vertical MP4
+
+```sh
+python3 scripts/edit.py input.mp4 cuts.json vertical.mp4 --portrait
+```
+
+The output is 1080×1920 with square pixels. The picture is centered and fitted
+using its display proportions, with black padding where needed to keep the
+whole picture visible. Reuse the same cut list for the SRT.
+
 ## Keep existing SRT captions
 
 After exporting the video, pass the original video, the same cut list and a UTF-8 SRT timed to the original video. Use a new SRT path next to the edited MP4.
