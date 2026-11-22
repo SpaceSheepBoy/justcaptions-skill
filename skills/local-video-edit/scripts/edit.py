@@ -88,10 +88,13 @@ def render(source, output, cuts, video, audio, *, portrait=False):
     cut_starts = []
     for index, cut in enumerate(cuts):
         start, end = (format(cut[key], ".6f") for key in ("start", "end"))
-        cut_starts.append(int(offset * 1_000_000))
+        cut_start = int(offset * 1_000_000)
+        cut_starts.append(cut_start)
+        source_start = int(cut["start"] * 1_000_000)
+        # Fill the opening with the first frame while keeping later frames aligned to source time.
         filters.append(
             f"[0:{video}]settb=AVTB,trim=start={start}:end={end},"
-            f"setpts=PTS-STARTPTS+{cut_starts[-1]}[v{index}]"
+            f"setpts='if(eq(N,0),{cut_start},PTS-{source_start}+{cut_start})'[v{index}]"
         )
         video_inputs.append(f"[v{index}]")
         offset += cut["end"] - cut["start"]

@@ -179,6 +179,26 @@ class LocalVideoEditTests(unittest.TestCase):
         self.assertAlmostEqual(float(media["format"]["duration"]), 0.123123, delta=0.001)
 
 
+    def test_off_frame_cuts_keep_later_frames_on_the_source_timeline(self):
+        subprocess.run([
+            "ffmpeg", "-v", "error",
+            "-f", "lavfi", "-i", "color=red:s=64x48:r=5:d=0.4",
+            "-f", "lavfi", "-i", "color=blue:s=64x48:r=5:d=0.6",
+            "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+            "-map", "[v]", "-c:v", "libx264", str(self.source),
+        ], check=True)
+        # The cut starts between frames. Its first red frame fills the opening,
+        # but the blue transition at source time 0.4 still belongs at 0.39.
+        self.cuts.write_text('[{"start":0.01,"end":0.45},{"start":0.8,"end":0.81}]')
+        edit = self.edit()
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        packets = json.loads(subprocess.check_output([
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "packet=pts", "-of", "json", str(self.output),
+        ]))["packets"]
+        self.assertEqual([packet["pts"] for packet in packets], [0, 390000, 440000])
+        self.assertAlmostEqual(float(self.inspect()["format"]["duration"]), 0.45, delta=0.001)
+
     def test_retimes_existing_captions_across_reordered_and_repeated_cuts(self):
         self.make_source(audio=True)
         self.cuts.write_text('[{"start":1.2,"end":1.8},{"start":0.2,"end":0.8},{"start":1.2,"end":1.8}]')

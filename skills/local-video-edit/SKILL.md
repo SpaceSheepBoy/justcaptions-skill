@@ -8,7 +8,7 @@ description: Cut and join selected ranges from one local video with FFmpeg. Use 
 Requires Python 3.9+ and a recent FFmpeg build with `libx264`, `ffmpeg` and `ffprobe` on PATH. Tested with FFmpeg 7.1.1. The workflow runs on one SDR source video and a local edit decision list. It needs no API key, model download or upload.
 
 1. Find the source-time ranges to keep from the user's timestamps, an existing timed transcript, or inspection of the source. For speech, start and end on complete thoughts where possible. Verify boundaries against playback if a transcript uses coarse timestamps. Keep original wording and retain context for factual claims.
-2. Save the ranges in output order as an array of objects in a local JSON file. Numbers are source seconds with up to six decimal places. Each range should contain a visible source frame. Ranges may be reordered or repeated when the edit calls for it.
+2. Save the ranges in output order as an array of objects in a local JSON file. Numbers are source seconds with up to six decimal places. Each range should contain a visible source frame. If a cut starts between frames, the first frame in the range fills the opening. Later frames keep their original timing relative to the cut start so they stay aligned with audio and retimed captions. Ranges may be reordered or repeated when the edit calls for it.
 
    ```json
    [{"start": 2.5, "end": 7}, {"start": 11.2, "end": 16}]
