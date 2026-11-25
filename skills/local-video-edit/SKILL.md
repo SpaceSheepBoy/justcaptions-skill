@@ -20,7 +20,7 @@ Requires Python 3.9+ and a recent FFmpeg build with `libx264`, `ffmpeg` and `ffp
    python3 scripts/edit.py input.mp4 cuts.json edited.mp4
    ```
 
-4. Check the output duration against the plan to within frame/encoder rounding. Preview each cut and verify picture, sound and transitions. Both the source and existing outputs are protected. The new MP4 contains the primary video encoded as H.264 and the first audio track encoded as AAC if present.
+4. Check the output duration against the plan to within frame/encoder rounding. Preview each cut and verify picture, sound and transitions. Both the source and existing outputs are protected. The new MP4 contains the primary video encoded as H.264 and the first audio track encoded as AAC if present. The export omits source chapters and file-level tags such as title and GPS location.
 
 ## Export a vertical MP4
 

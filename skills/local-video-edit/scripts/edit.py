@@ -118,7 +118,8 @@ def render(source, output, cuts, video, audio, *, portrait=False):
     command = [
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
         "-i", str(source), "-filter_complex", ";".join(filters),
-        "-map", "[video]", "-map_chapters", "-1", "-c:v", "libx264", "-crf", "18", "-bf", "0",
+        "-map", "[video]", "-map_metadata", "-1", "-map_chapters", "-1",
+        "-c:v", "libx264", "-crf", "18", "-bf", "0",
         "-pix_fmt", "yuv420p", "-fps_mode", "vfr", "-enc_time_base:v", "1:1000000",
         "-video_track_timescale", "1000000",
     ]

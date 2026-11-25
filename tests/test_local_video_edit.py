@@ -152,6 +152,33 @@ class LocalVideoEditTests(unittest.TestCase):
         self.assertAlmostEqual(float(media["format"]["duration"]), 0.6, delta=0.001)
         self.assertEqual(media["chapters"], [])
 
+    def test_export_omits_source_title_and_location(self):
+        self.source = self.source.with_suffix(".mov")
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=64x48:r=25:d=1",
+            "-c:v", "libx264", "-metadata", "title=Synthetic source title",
+            "-metadata", "location=+12.3456+078.9012/", str(self.source),
+        ], check=True)
+        original = self.source.read_bytes()
+        self.cuts.write_text('[{"start":0.2,"end":0.24}]')
+
+        def format_tags(path):
+            metadata = json.loads(subprocess.check_output([
+                "ffprobe", "-v", "error", "-show_entries", "format_tags", "-of", "json", str(path),
+            ]))
+            return metadata["format"]["tags"]
+
+        source_tags = format_tags(self.source)
+        self.assertEqual(source_tags["title"], "Synthetic source title")
+        self.assertTrue(any(key.startswith("location") for key in source_tags))
+        edit = self.edit()
+        self.assertEqual(edit.returncode, 0, edit.stderr)
+        tags = format_tags(self.output)
+        self.assertNotIn("title", tags)
+        self.assertFalse(any(key.startswith("location") for key in tags), tags)
+        self.assertEqual(int(self.inspect()["streams"][0]["nb_frames"]), 1)
+        self.assertEqual(self.source.read_bytes(), original)
+
     def test_rejects_a_range_without_a_video_frame(self):
         self.make_source(audio=True)
         original = self.source.read_bytes()
